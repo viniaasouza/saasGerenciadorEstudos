@@ -791,3 +791,44 @@ input, textarea, select {
   width: 100%;
 }
 
+/* ==========================================
+   WORKSPACE SETTINGS DROPDOWN MENU
+   ========================================== */
+.workspace-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.75rem;
+  color: var(--text-title);
+  width: 100%;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  line-height: 1.4;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.workspace-dropdown-item:hover {
+  background-color: var(--bg-element);
+  color: var(--text-title);
+}
+
+.workspace-dropdown-item.danger {
+  color: var(--color-danger);
+}
+
+.workspace-dropdown-item.danger:hover {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: var(--color-danger);
+}
+
+.workspace-dropdown-item:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+  background-color: transparent;
+}
+
+

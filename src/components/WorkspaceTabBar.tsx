@@ -167,37 +167,14 @@ export const WorkspaceTabBar: React.FC<WorkspaceTabBarProps> = ({
                   >
                     <button
                       onClick={() => handleStartRename(ws)}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.4rem',
-                        padding: '0.4rem 0.6rem',
-                        fontSize: '0.75rem',
-                        color: 'var(--text-title)',
-                        width: '100%',
-                        borderRadius: '4px',
-                        textAlign: 'left'
-                      }}
-                      className="nav-item"
+                      className="workspace-dropdown-item"
                     >
                       <Edit3 size={12} /> Renomear
                     </button>
                     <button
                       onClick={() => handleDelete(ws.id, ws.name)}
                       disabled={workspaces.length <= 1}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.4rem',
-                        padding: '0.4rem 0.6rem',
-                        fontSize: '0.75rem',
-                        color: workspaces.length <= 1 ? 'var(--text-muted)' : 'var(--color-danger)',
-                        width: '100%',
-                        borderRadius: '4px',
-                        textAlign: 'left',
-                        cursor: workspaces.length <= 1 ? 'not-allowed' : 'pointer'
-                      }}
-                      className="nav-item"
+                      className="workspace-dropdown-item danger"
                     >
                       <Trash2 size={12} /> Excluir
                     </button>
