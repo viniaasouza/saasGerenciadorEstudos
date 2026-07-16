@@ -662,6 +662,10 @@ input, textarea, select {
   font-weight: 700;
   color: var(--text-title);
   line-height: 1.3;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .calendar-block-time {
