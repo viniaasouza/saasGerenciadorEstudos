@@ -63,6 +63,7 @@ export interface QuestionSession {
   insightAncoragem?: string; // revision short text
   workspaceId?: string; // linked workspace context
   workspaceName?: string; // linked workspace name for filters
+  tipo?: 'treino' | 'simulado'; // tipo de registro
 }
 
 export interface StudyCycleConfig {

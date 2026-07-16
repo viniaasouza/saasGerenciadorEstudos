@@ -292,3 +292,74 @@ export function parseVerticalSyllabus(text: string): Omit<Subject, 'targetHours'
 
   return subjects;
 }
+
+/**
+ * Promotes a subject to maintenance and pulls a compatible subject from the backlog.
+ * Returns the updated subjects list and the name of the promoted backlog subject, if any.
+ */
+export function promoteSubjectAndReallocate(
+  subjects: Subject[],
+  promotedSubjectId: string
+): { updatedSubjects: Subject[]; promotedBacklogSubjectName?: string } {
+  // Find the promoted subject
+  const promotedSubject = subjects.find((s) => s.id === promotedSubjectId);
+  if (!promotedSubject || promotedSubject.status !== 'active') {
+    return { updatedSubjects: subjects };
+  }
+
+  // Update its status to maintenance
+  const updatedSubjects = subjects.map((s) => {
+    if (s.id === promotedSubjectId) {
+      return { ...s, status: 'maintenance' as const };
+    }
+    return s;
+  });
+
+  const promotedWeight = promotedSubject.weight;
+
+  // Find all backlog subjects
+  const backlogSubjects = updatedSubjects.filter((s) => s.status === 'backlog');
+  if (backlogSubjects.length === 0) {
+    return { updatedSubjects };
+  }
+
+  // Search hierarchy:
+  // 1. Same weight
+  // 2. Descending weight (promotedWeight - 1 down to 1)
+  // 3. Fallback: Any backlog subject
+  let subjectToPromote: Subject | undefined = undefined;
+
+  // Search exact weight
+  subjectToPromote = backlogSubjects.find((s) => s.weight === promotedWeight);
+
+  // Search descending weights
+  if (!subjectToPromote) {
+    for (let w = promotedWeight - 1; w >= 1; w--) {
+      subjectToPromote = backlogSubjects.find((s) => s.weight === w);
+      if (subjectToPromote) break;
+    }
+  }
+
+  // Fallback: Pick the first backlog subject
+  if (!subjectToPromote) {
+    subjectToPromote = backlogSubjects[0];
+  }
+
+  if (subjectToPromote) {
+    const targetId = subjectToPromote.id;
+    const finalSubjects = updatedSubjects.map((s) => {
+      if (s.id === targetId) {
+        return { ...s, status: 'active' as const };
+      }
+      return s;
+    });
+
+    return {
+      updatedSubjects: finalSubjects,
+      promotedBacklogSubjectName: subjectToPromote.name,
+    };
+  }
+
+  return { updatedSubjects };
+}
+

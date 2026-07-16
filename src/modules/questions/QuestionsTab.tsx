@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../db/database';
 import type { Subject, QuestionSession } from '../../types';
-import { Plus, Trash2, Award, ClipboardList, TrendingUp, Info, Keyboard } from 'lucide-react';
+import { Plus, Trash2, Award, ClipboardList, TrendingUp, Info, Keyboard, CheckCircle } from 'lucide-react';
 
 interface QuestionsTabProps {
   activeWorkspaceId: string;
+  onTriggerPromotion?: (subjectId: string, subjectName: string) => void;
 }
 
-export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId }) => {
+export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId, onTriggerPromotion }) => {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [questions, setQuestions] = useState<QuestionSession[]>([]);
 
@@ -17,6 +18,7 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId })
   const [attempted, setAttempted] = useState<number | ''>('');
   const [correct, setCorrect] = useState<number | ''>('');
   const [banca, setBanca] = useState('FGV');
+  const [tipo, setTipo] = useState<'treino' | 'simulado'>('treino');
   const [adicionarParaRevisao, setAdicionarParaRevisao] = useState(false);
   const [insightAncoragem, setInsightAncoragem] = useState('');
 
@@ -29,6 +31,7 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId })
     attempted: number;
     correct: number;
     banca: string;
+    tipo: 'treino' | 'simulado';
     insight?: string;
     isNewSubject: boolean;
   } | null>(null);
@@ -95,7 +98,14 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId })
     }
 
     const matched = subjects.find(s => s.name.toLowerCase().includes(subName.toLowerCase()));
-    
+
+    // Check if "simulado" is specified anywhere in the parts
+    let resolvedTipo: 'treino' | 'simulado' = 'treino';
+    const hasSimuladoKeyword = parts.some(p => p.toLowerCase() === 'simulado');
+    if (hasSimuladoKeyword) {
+      resolvedTipo = 'simulado';
+    }
+
     setQuickError(null);
     setQuickPreview({
       subjectName: matched ? matched.name : subName,
@@ -103,6 +113,7 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId })
       attempted: att,
       correct: cor,
       banca: bncStr || 'FGV',
+      tipo: resolvedTipo,
       insight: insStr,
       isNewSubject: !matched
     });
@@ -144,6 +155,7 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId })
       attempted: qAttempted,
       correct: qCorrect,
       banca: banca,
+      tipo: tipo,
       date: new Date().toISOString(),
       adicionarParaRevisao: qCorrect < qAttempted ? adicionarParaRevisao : false,
       insightAncoragem: qCorrect < qAttempted && adicionarParaRevisao ? insightAncoragem.trim() : undefined,
@@ -155,9 +167,24 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId })
     setQuestions(updated);
     db.saveQuestions(updated);
 
+    // Trigger promotion check if the registered session is a simulado with >= 85%
+    if (tipo === 'simulado' && (qCorrect / qAttempted) >= 0.85 && sub.status === 'active') {
+      const subjectSimuladosCount = updated.filter(
+        q => q.subjectId === sub.id && 
+             q.workspaceId === activeWorkspaceId && 
+             q.tipo === 'simulado' && 
+             (q.correct / q.attempted) >= 0.85
+      ).length;
+
+      if (subjectSimuladosCount >= 3 && onTriggerPromotion) {
+        onTriggerPromotion(sub.id, sub.name);
+      }
+    }
+
     // Reset inputs
     setAttempted('');
     setCorrect('');
+    setTipo('treino');
     setAdicionarParaRevisao(false);
     setInsightAncoragem('');
   };
@@ -168,10 +195,12 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId })
     if (quickError || !quickPreview) return;
 
     let finalSubjectId = '';
+    let finalSubjectStatus = 'active';
     const matched = subjects.find(s => s.name.toLowerCase().includes(quickPreview.subjectName.toLowerCase()));
-    
+
     if (matched) {
       finalSubjectId = matched.id;
+      finalSubjectStatus = matched.status;
     } else {
       const newSub: Subject = {
         id: `subject-${Date.now()}`,
@@ -203,6 +232,7 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId })
       attempted: quickPreview.attempted,
       correct: quickPreview.correct,
       banca: quickPreview.banca,
+      tipo: quickPreview.tipo,
       date: new Date().toISOString(),
       adicionarParaRevisao: hasErr,
       insightAncoragem: quickPreview.insight?.trim() || (hasErr ? 'Erro registrado via Quick Logger.' : undefined),
@@ -214,6 +244,20 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId })
     setQuestions(updated);
     db.saveQuestions(updated);
     setQuickInput('');
+
+    // Trigger promotion check
+    if (quickPreview.tipo === 'simulado' && (quickPreview.correct / quickPreview.attempted) >= 0.85 && finalSubjectStatus === 'active') {
+      const subjectSimuladosCount = updated.filter(
+        q => q.subjectId === finalSubjectId && 
+             q.workspaceId === activeWorkspaceId && 
+             q.tipo === 'simulado' && 
+             (q.correct / q.attempted) >= 0.85
+      ).length;
+
+      if (subjectSimuladosCount >= 3 && onTriggerPromotion) {
+        onTriggerPromotion(finalSubjectId, quickPreview.subjectName);
+      }
+    }
   };
 
   const handleDeleteLog = (id: string) => {
@@ -225,13 +269,29 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId })
   // Filter history list to only show questions of active workspace
   const activeWorkspaceQuestions = questions.filter(q => q.workspaceId === activeWorkspaceId);
 
-  // Metrics calculation based on filtered questions
+  // Metrics calculation
   const totalAttempted = activeWorkspaceQuestions.reduce((sum, q) => sum + q.attempted, 0);
   const totalCorrect = activeWorkspaceQuestions.reduce((sum, q) => sum + q.correct, 0);
   const averageRate = totalAttempted > 0 ? (totalCorrect / totalAttempted) * 100 : 0;
 
   const activeSubject = subjects.find((s) => s.id === subjectId);
   const activeTopics = activeSubject?.topics || [];
+
+  // Calculate consistency progress for active subjects (3 simulados >= 85%)
+  const activeSubjects = subjects.filter(s => s.status === 'active');
+  const consistencyStats = activeSubjects.map(sub => {
+    const successfulSimuladosCount = activeWorkspaceQuestions.filter(
+      q => q.subjectId === sub.id && 
+           q.tipo === 'simulado' && 
+           (q.correct / q.attempted) >= 0.85
+    ).length;
+
+    return {
+      id: sub.id,
+      name: sub.name,
+      count: Math.min(3, successfulSimuladosCount),
+    };
+  });
 
   return (
     <div className="tab-container">
@@ -277,6 +337,71 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId })
         </div>
       </div>
 
+      {/* Progress tracker for mock exams (Simulados por Matéria) */}
+      <div className="placeholder-card card-primary" style={{ padding: '1.5rem', marginBottom: '1rem', minHeight: 'auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
+          <CheckCircle size={20} style={{ color: 'var(--color-success)' }} />
+          <h3>Simulados por Matéria (Progresso de Consistência)</h3>
+        </div>
+        <p className="card-notes" style={{ marginBottom: '1rem' }}>
+          Realize 3 simulados com taxa de acerto $\ge 85\%$ para promover a matéria ao modo de manutenção e liberar novas disciplinas do backlog.
+        </p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1rem' }}>
+          {consistencyStats.length === 0 ? (
+            <p style={{ gridColumn: '1/-1', color: 'var(--text-muted)', fontSize: '0.85rem', fontStyle: 'italic' }}>
+              Nenhuma matéria ativa cadastrada para rastreamento.
+            </p>
+          ) : (
+            consistencyStats.map((stat) => (
+              <div key={stat.id} style={{
+                backgroundColor: 'var(--bg-element)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '8px',
+                padding: '0.75rem 1rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.5rem'
+              }}>
+                <span style={{ fontWeight: 'bold', fontSize: '0.85rem', color: 'var(--text-title)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {stat.name}
+                </span>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: '0.35rem' }}>
+                    {[1, 2, 3].map((num) => (
+                      <div
+                        key={num}
+                        style={{
+                          width: '12px',
+                          height: '12px',
+                          borderRadius: '50%',
+                          backgroundColor: stat.count >= num ? 'var(--color-success)' : 'var(--border-color)',
+                          border: stat.count >= num ? 'none' : '1px solid var(--text-muted)'
+                        }}
+                      />
+                    ))}
+                  </div>
+
+                  <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: stat.count === 3 ? 'var(--color-success)' : 'var(--text-muted)' }}>
+                    {stat.count}/3 concluídos
+                  </span>
+                </div>
+
+                {/* Micro progress bar */}
+                <div style={{ height: '4px', backgroundColor: 'var(--border-color)', borderRadius: '2px', overflow: 'hidden' }}>
+                  <div style={{
+                    height: '100%',
+                    width: `${(stat.count / 3) * 100}%`,
+                    backgroundColor: stat.count === 3 ? 'var(--color-success)' : 'var(--color-primary)'
+                  }} />
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
       {/* Quick Logger Field */}
       <div className="placeholder-card card-primary" style={{ padding: '1.5rem', marginBottom: '1rem', minHeight: 'auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
@@ -284,12 +409,12 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId })
           <h3 style={{ fontSize: '1.1rem' }}>Quick Logger (Linha Única)</h3>
         </div>
         <p className="card-notes" style={{ marginBottom: '0.75rem' }}>
-          Formato: <code>Matéria | Tópico | Total | Acertos | Banca | Insight de Erro (Opcional)</code>
+          Formato: <code>Matéria | Tópico | Total | Acertos | FGV | Insight (Opcional) | simulado</code>
         </p>
         <form onSubmit={handleQuickLoggerSubmit} style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
           <input
             type="text"
-            placeholder="Ex: Direito Administrativo | Atos | 15 | 12 | FGV | Revisar ato nulo."
+            placeholder="Ex: Direito Administrativo | Atos | 10 | 9 | FGV | O ato nulo não gera direitos. | simulado"
             value={quickInput}
             onChange={(e) => setQuickInput(e.target.value)}
             style={{
@@ -331,7 +456,8 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId })
             {quickPreview.isNewSubject && <span style={{ color: 'var(--color-warning)', fontSize: '0.7rem' }}>(Nova)</span>} ·{' '}
             Tópico: <strong>{quickPreview.topicName}</strong> ·{' '}
             Desempenho: <strong>{quickPreview.correct}/{quickPreview.attempted}</strong> ({(quickPreview.correct/quickPreview.attempted*100).toFixed(0)}%) ·{' '}
-            Banca: <strong>{quickPreview.banca}</strong>
+            Banca: <strong>{quickPreview.banca}</strong> ·{' '}
+            Tipo: <strong style={{ color: quickPreview.tipo === 'simulado' ? 'var(--color-success)' : 'var(--text-muted)' }}>{quickPreview.tipo.toUpperCase()}</strong>
             {quickPreview.insight && <div>Insight: <em>"{quickPreview.insight}"</em></div>}
           </div>
         )}
@@ -395,6 +521,31 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId })
                     <option key={topic.id} value={topic.name}>{topic.name}</option>
                   ))}
                 </select>
+              </div>
+
+              {/* Tipo de Registro (Treino ou Simulado) */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                <label style={{ fontSize: '0.85rem', fontWeight: 'bold', color: 'var(--text-title)' }}>Tipo de Exercício</label>
+                <div style={{ display: 'flex', gap: '1rem' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.9rem' }}>
+                    <input
+                      type="radio"
+                      name="exerciseType"
+                      checked={tipo === 'treino'}
+                      onChange={() => setTipo('treino')}
+                    />
+                    Treino Comum
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.9rem' }}>
+                    <input
+                      type="radio"
+                      name="exerciseType"
+                      checked={tipo === 'simulado'}
+                      onChange={() => setTipo('simulado')}
+                    />
+                    Simulado Completo
+                  </label>
+                </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
@@ -496,7 +647,7 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId })
                     />
                     Adicionar ao Caderno de Erros?
                   </label>
-                  
+
                   {adicionarParaRevisao && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
                       <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Insight de Ancoragem (Fórmula/Conceito)</span>
@@ -536,7 +687,7 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId })
                   <thead>
                     <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
                       <th style={{ padding: '0.75rem 0.5rem' }}>Matéria / Tópico</th>
-                      <th style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>Banca</th>
+                      <th style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>Tipo / Banca</th>
                       <th style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>Acertos</th>
                       <th style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>%</th>
                       <th style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>Ação</th>
@@ -570,8 +721,11 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId })
                               </div>
                             )}
                           </td>
-                          <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center', fontWeight: '600' }}>
-                            {log.banca}
+                          <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>
+                            <div style={{ fontWeight: 'bold', fontSize: '0.75rem', color: log.tipo === 'simulado' ? 'var(--color-success)' : 'var(--text-muted)' }}>
+                              {log.tipo ? log.tipo.toUpperCase() : 'TREINO'}
+                            </div>
+                            <div style={{ fontSize: '0.8rem', color: 'var(--text-main)', marginTop: '0.1rem' }}>{log.banca}</div>
                           </td>
                           <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>
                             {log.correct} / {log.attempted}
