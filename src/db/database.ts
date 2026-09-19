@@ -868,7 +868,7 @@ export const db = {
             this.saveCycleBlocks(wsId, wsPayload.cycleBlocks);
           }
           if (wsPayload.cycleWeek) {
-            this.setCycleWeek(wsId, wsPayload.cycleWeek);
+            this.saveCycleWeek(wsId, wsPayload.cycleWeek);
           }
           if (wsPayload.concursoInfo) {
             this.saveConcursoInfo(wsId, wsPayload.concursoInfo);

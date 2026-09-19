@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test:autopilot": "node test-autopilot.mjs && node test-sm2.mjs"
+    "test": "node test-autopilot.mjs && node test-sm2.mjs && node test-backup.mjs",
+    "test:autopilot": "node test-autopilot.mjs && node test-sm2.mjs && node test-backup.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.24.0",
