@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../../db/database';
 import { generateStudyCycle, parseVerticalSyllabus, reallocateIncompleteBlocks, DAYS_ORDER } from '../cycle/cycleGenerator';
 import type { Subject, StudyBlock, SubjectStatus, StudyCycleConfig } from '../../types';
-import { Plus, Trash2, RefreshCw, Upload, CheckCircle2, Circle, ChevronDown, ChevronUp, AlertTriangle, Calendar, Play, Settings } from 'lucide-react';
+import { TCE_GO_SUBJECTS_PRESET, TCE_GO_CONCURSO_INFO } from '../../data/tceGoPreset';
+import { Plus, Trash2, RefreshCw, Upload, CheckCircle2, Circle, ChevronDown, ChevronUp, AlertTriangle, Calendar, Play, Settings, Zap, FileText } from 'lucide-react';
 
 interface PlanningTabProps {
   onStartStudy: (subjectId: string, subjectName: string, blockId: string) => void;
@@ -38,7 +39,8 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({ onStartStudy, activeBl
       cycleDurationWeeks: config.cycleDurationWeeks,
       dailyHours: config.dailyHours || { segunda: 4, terca: 4, quarta: 4, quinta: 4, sexta: 4, sabado: 2, domingo: 2 }
     });
-    setCycleBlocks(db.getCycleBlocks(activeWorkspaceId));
+    const syncRes = db.syncCycleSchedule(activeWorkspaceId);
+    setCycleBlocks(syncRes.blocks);
   }, [activeWorkspaceId]);
 
   const handleSaveSubjects = (updatedSubjects: Subject[]) => {
@@ -54,6 +56,42 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({ onStartStudy, activeBl
   const handleSaveBlocks = (updatedBlocks: StudyBlock[]) => {
     setCycleBlocks(updatedBlocks);
     db.saveCycleBlocks(activeWorkspaceId, updatedBlocks);
+  };
+
+  // Load official TCE-GO IT syllabus preset
+  const handleLoadTceGoPreset = () => {
+    if (subjects.length > 0 && !window.confirm('Deseja carregar o Edital Completo TCE-GO (TI)? As matérias atuais deste workspace serão substituídas.')) {
+      return;
+    }
+    handleSaveSubjects(TCE_GO_SUBJECTS_PRESET);
+    db.saveConcursoInfo(activeWorkspaceId, TCE_GO_CONCURSO_INFO);
+    const blocks = generateStudyCycle(
+      TCE_GO_SUBJECTS_PRESET,
+      cycleConfig.weeklyHours,
+      90,
+      cycleConfig.dailyHours
+    );
+    handleSaveBlocks(blocks);
+    alert('Edital Oficial TCE-GO (TI) carregado com sucesso! 14 disciplinas e cronograma semanal atualizados.');
+  };
+
+  // Import Gran Questoes JSON backup
+  const handleImportGranJson = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = JSON.parse(event.target?.result as string);
+        const res = db.importGranBackup(activeWorkspaceId, data);
+        setSubjects(db.getSubjects(activeWorkspaceId));
+        alert(`Backup Gran importado com sucesso! ${res.importedTopics} tópicos atualizados e ${res.importedSessions} registros sincronizados.`);
+      } catch {
+        alert('Erro ao processar o arquivo de backup JSON do Gran.');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
   };
 
   // Update specific day hours availability
@@ -193,7 +231,12 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({ onStartStudy, activeBl
   const handleToggleBlock = (blockId: string) => {
     const updated = cycleBlocks.map((b) => {
       if (b.id === blockId) {
-        return { ...b, completed: !b.completed };
+        const nextCompleted = !b.completed;
+        return {
+          ...b,
+          completed: nextCompleted,
+          completedAt: nextCompleted ? new Date().toISOString() : undefined,
+        };
       }
       return b;
     });
@@ -290,6 +333,54 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({ onStartStudy, activeBl
           <p className="card-notes" style={{ marginTop: '0.5rem', textAlign: 'center' }}>
             Cole o edital verticalizado estruturado.
           </p>
+        </div>
+
+        {/* PRESET TCE-GO & GRAN BACKUP CARD */}
+        <div className="placeholder-card" style={{
+          minHeight: 'auto',
+          padding: '1.5rem',
+          justifyContent: 'center',
+          background: 'linear-gradient(135deg, rgba(200, 16, 46, 0.08), rgba(13, 19, 76, 0.08))',
+          border: '1.5px solid rgba(200, 16, 46, 0.25)'
+        }}>
+          <button
+            onClick={handleLoadTceGoPreset}
+            className="mock-btn"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              width: '100%',
+              justifyContent: 'center',
+              fontWeight: 'bold',
+              background: '#c8102e',
+              color: '#ffffff'
+            }}
+          >
+            <Zap size={18} />
+            Carregar Edital TCE-GO (TI)
+          </button>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '0.5rem' }}>
+            <label style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px',
+              padding: '6px',
+              background: 'var(--card-bg, #ffffff)',
+              border: '1px solid var(--border-color)',
+              borderRadius: '6px',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              textAlign: 'center'
+            }}>
+              <FileText size={13} />
+              <span>Importar JSON Gran</span>
+              <input type="file" accept=".json" onChange={handleImportGranJson} style={{ display: 'none' }} />
+            </label>
+          </div>
         </div>
       </div>
 
@@ -455,7 +546,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({ onStartStudy, activeBl
       </div>
 
       {/* Main Grid: Subjects Manager (Left) and Study Cycle Queue (Right) */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '2rem', marginTop: '1.5rem' }} className="responsive-split-grid">
+      <div className="responsive-split-grid" style={{ marginTop: '1.5rem' }}>
         
         {/* Subjects List */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>

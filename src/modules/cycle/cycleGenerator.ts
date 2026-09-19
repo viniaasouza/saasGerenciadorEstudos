@@ -3,6 +3,25 @@ import type { Subject, StudyBlock } from '../../types';
 export const DAYS_ORDER = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
 
 /**
+ * Calculates the Monday date string (YYYY-MM-DD) for the week containing the given date.
+ */
+export function getMondayOfWeek(d: Date = new Date()): string {
+  const date = new Date(d);
+  const day = date.getDay(); // 0 = Sunday, 1 = Monday...
+  const diff = date.getDate() - (day === 0 ? 6 : day - 1);
+  const monday = new Date(date.setDate(diff));
+  const year = monday.getFullYear();
+  const month = String(monday.getMonth() + 1).padStart(2, '0');
+  const dayNum = String(monday.getDate()).padStart(2, '0');
+  return `${year}-${month}-${dayNum}`;
+}
+
+export function getTodayDayName(d: Date = new Date()): string {
+  const day = d.getDay(); // 0 = Sunday, 1 = Monday...
+  return DAYS_ORDER[day === 0 ? 6 : day - 1];
+}
+
+/**
  * Generates an optimized list of study blocks based on weekly hours, subject weights, subject status,
  * and interleaving to avoid fatigue. Allocates blocks to days of the week based on daily availability.
  */

@@ -1,14 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { WorkspaceTabBar } from './components/WorkspaceTabBar';
+import { AutopilotTab } from './modules/autopilot/AutopilotTab';
 import { PlanningTab } from './modules/planning/PlanningTab';
+import { SyllabusTab } from './modules/syllabus/SyllabusTab';
 import { TimerTab } from './modules/timer/TimerTab';
+import { ReviewsTab } from './modules/reviews/ReviewsTab';
+import { FlashcardsTab } from './modules/flashcards/FlashcardsTab';
 import { QuestionsTab } from './modules/questions/QuestionsTab';
 import { AnalyticsTab } from './modules/analytics/AnalyticsTab';
 import { db } from './db/database';
 import { promoteSubjectAndReallocate, generateStudyCycle } from './modules/cycle/cycleGenerator';
-import type { CicloWorkspace } from './types';
+import { TCE_GO_SUBJECTS_PRESET, TCE_GO_CONCURSO_INFO } from './data/tceGoPreset';
+import type { CicloWorkspace, ConcursoInfo } from './types';
 import './index.css';
 
 function App() {
@@ -18,14 +23,20 @@ function App() {
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   });
 
-  const [activeTab, setActiveTab] = useState<string>('planning');
+  const [activeTab, setActiveTab] = useState<string>('autopilot');
 
   // Multi-Workspace States
   const [workspaces, setWorkspaces] = useState<CicloWorkspace[]>([]);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>('');
+  const [concursoInfo, setConcursoInfo] = useState<ConcursoInfo | null>(null);
 
-  // State to pass study context between Planning and Timer tabs
-  const [selectedBlockForTimer, setSelectedBlockForTimer] = useState<{ id: string; name: string } | null>(null);
+  // State to pass study context between Planning/Autopilot and Timer tabs
+  const [selectedBlockForTimer, setSelectedBlockForTimer] = useState<{
+    id: string;
+    name: string;
+    topicId?: string;
+    subtopicId?: string;
+  } | null>(null);
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
 
   // States for promotion triggers
@@ -57,13 +68,24 @@ function App() {
     if (wsList.length === 0) {
       const defaultWs: CicloWorkspace = {
         id: `workspace-${Date.now()}`,
-        name: 'Meu Primeiro Ciclo',
+        name: 'TCE-GO (Analista TI)',
         createdAt: new Date().toISOString()
       };
       wsList = [defaultWs];
       db.saveWorkspaces(wsList);
       activeId = defaultWs.id;
       db.setActiveWorkspaceId(defaultWs.id);
+
+      // Clean onboarding: populate default TCE-GO syllabus preset and auto-generated study cycle
+      // without leaking personal study sessions or question logs
+      db.saveSubjects(defaultWs.id, TCE_GO_SUBJECTS_PRESET);
+      db.saveConcursoInfo(defaultWs.id, TCE_GO_CONCURSO_INFO);
+      const defaultBlocks = generateStudyCycle(
+        TCE_GO_SUBJECTS_PRESET,
+        20,
+        90
+      );
+      db.saveCycleBlocks(defaultWs.id, defaultBlocks);
     }
 
     if (!activeId || !wsList.some(w => w.id === activeId)) {
@@ -146,16 +168,22 @@ function App() {
     }
   };
 
-  const handleStartStudy = (subjectId: string, subjectName: string, blockId: string) => {
-    setSelectedBlockForTimer({ id: subjectId, name: subjectName });
+  const handleStartStudy = (
+    subjectId: string,
+    subjectName: string,
+    blockId: string,
+    topicId?: string,
+    subtopicId?: string
+  ) => {
+    setSelectedBlockForTimer({ id: subjectId, name: subjectName, topicId, subtopicId });
     setActiveBlockId(blockId);
     setActiveTab('timer');
   };
 
-  const handleClearSelectedSubject = () => {
+  const handleClearSelectedSubject = useCallback(() => {
     setSelectedBlockForTimer(null);
     setActiveBlockId(null);
-  };
+  }, []);
 
   const handleSessionSaved = () => {
     if (activeBlockId && activeWorkspaceId) {
@@ -163,6 +191,7 @@ function App() {
       const idx = blocks.findIndex(b => b.id === activeBlockId);
       if (idx !== -1) {
         blocks[idx].completed = true;
+        blocks[idx].completedAt = new Date().toISOString();
         db.saveCycleBlocks(activeWorkspaceId, blocks);
       }
     }
@@ -203,10 +232,26 @@ function App() {
     setRefreshStatsTrigger(p => p + 1); // trigger updates
   };
 
+  // Load concursoInfo for active workspace
+  useEffect(() => {
+    if (!activeWorkspaceId) return;
+    const info = db.getConcursoInfo(activeWorkspaceId);
+    setConcursoInfo(info);
+  }, [activeWorkspaceId]);
+
   const renderActiveTab = () => {
     if (!activeWorkspaceId) return null;
     
     switch (activeTab) {
+      case 'autopilot':
+        return (
+          <AutopilotTab
+            key={activeWorkspaceId}
+            activeWorkspaceId={activeWorkspaceId}
+            onStartStudy={handleStartStudy}
+            onRefreshStats={() => setRefreshStatsTrigger((prev) => prev + 1)}
+          />
+        );
       case 'planning':
         return (
           <PlanningTab
@@ -214,6 +259,17 @@ function App() {
             activeWorkspaceId={activeWorkspaceId}
             onStartStudy={handleStartStudy}
             activeBlockId={activeBlockId}
+          />
+        );
+      case 'syllabus':
+        return (
+          <SyllabusTab
+            key={activeWorkspaceId}
+            activeWorkspaceId={activeWorkspaceId}
+            onStartStudy={(subId, subName) => {
+              setSelectedBlockForTimer({ id: subId, name: subName });
+              setActiveTab('timer');
+            }}
           />
         );
       case 'timer':
@@ -224,6 +280,24 @@ function App() {
             selectedSubject={selectedBlockForTimer}
             clearSelectedSubject={handleClearSelectedSubject}
             onSessionSaved={handleSessionSaved}
+          />
+        );
+      case 'reviews':
+        return (
+          <ReviewsTab
+            key={activeWorkspaceId}
+            activeWorkspaceId={activeWorkspaceId}
+            onStartStudy={(subId, subName) => {
+              setSelectedBlockForTimer({ id: subId, name: subName });
+              setActiveTab('timer');
+            }}
+          />
+        );
+      case 'flashcards':
+        return (
+          <FlashcardsTab
+            key={activeWorkspaceId}
+            activeWorkspaceId={activeWorkspaceId}
           />
         );
       case 'questions':
@@ -238,11 +312,11 @@ function App() {
         return <AnalyticsTab key={activeWorkspaceId} activeWorkspaceId={activeWorkspaceId} />;
       default:
         return (
-          <PlanningTab
+          <AutopilotTab
             key={activeWorkspaceId}
             activeWorkspaceId={activeWorkspaceId}
             onStartStudy={handleStartStudy}
-            activeBlockId={activeBlockId}
+            onRefreshStats={() => setRefreshStatsTrigger((prev) => prev + 1)}
           />
         );
     }
@@ -250,7 +324,7 @@ function App() {
 
   return (
     <div className="app-layout">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
+      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} concursoInfo={concursoInfo} />
       <div className="main-container">
         {workspaces.length > 0 && (
           <WorkspaceTabBar
@@ -267,6 +341,9 @@ function App() {
           toggleTheme={toggleTheme}
           weeklyHoursCompleted={weeklyHoursCompleted}
           weeklyHoursTarget={weeklyHoursTarget}
+          concursoInfo={concursoInfo}
+          activeTab={activeTab}
+          onNavigateToTimer={() => setActiveTab('timer')}
         />
         <main className="content-area">
           <div className="fade-in-tab">
@@ -290,7 +367,7 @@ function App() {
           alignItems: 'center',
           zIndex: 9999
         }}>
-          <div className="placeholder-card card-primary" style={{ width: '90%', maxWidth: '500px', gap: '1.5rem', padding: '2.5rem' }}>
+          <div className="placeholder-card card-primary modal-dialog" style={{ width: '90%', maxWidth: '500px', gap: '1.5rem', padding: '2.5rem' }}>
             <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-success)', fontSize: '1.4rem' }}>
               🎉 Consistência Atingida!
             </h3>

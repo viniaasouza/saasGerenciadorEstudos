@@ -225,7 +225,7 @@ export const WorkspaceTabBar: React.FC<WorkspaceTabBarProps> = ({
           <form
             onSubmit={handleCreate}
             onClick={(e) => e.stopPropagation()}
-            className="placeholder-card card-primary"
+            className="placeholder-card card-primary modal-dialog"
             style={{ width: '90%', maxWidth: '400px', gap: '1.25rem', padding: '2rem' }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

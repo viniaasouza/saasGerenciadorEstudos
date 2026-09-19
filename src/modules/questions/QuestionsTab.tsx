@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../db/database';
-import type { Subject, QuestionSession } from '../../types';
-import { Plus, Trash2, Award, ClipboardList, TrendingUp, Info, Keyboard, CheckCircle } from 'lucide-react';
+import { buildGranQuestoesUrl } from '../../data/tceGoPreset';
+import type { Subject, QuestionSession, Flashcard } from '../../types';
+import { Plus, Trash2, Award, ClipboardList, TrendingUp, Info, Keyboard, CheckCircle, ExternalLink, Zap } from 'lucide-react';
+import { FlashcardModal } from '../flashcards/FlashcardModal';
 
 interface QuestionsTabProps {
   activeWorkspaceId: string;
@@ -11,6 +13,12 @@ interface QuestionsTabProps {
 export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId, onTriggerPromotion }) => {
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [questions, setQuestions] = useState<QuestionSession[]>([]);
+
+  // Flashcard Creator Modal states
+  const [isFlashcardModalOpen, setIsFlashcardModalOpen] = useState(false);
+  const [flashcardInitialData, setFlashcardInitialData] = useState<Partial<Flashcard> | null>(null);
+  const [flashcardSuccessMsg, setFlashcardSuccessMsg] = useState<string | null>(null);
+  const [onlyErrorsFilter, setOnlyErrorsFilter] = useState(false);
 
   // Manual Form states
   const [subjectId, setSubjectId] = useState('');
@@ -62,7 +70,7 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId, o
         setTopicName(subjects[0].topics[0].name);
       }
     }
-  }, [subjects]);
+  }, [subjects, subjectId]);
 
   const hasErrors = attempted !== '' && correct !== '' && Number(correct) < Number(attempted);
 
@@ -266,8 +274,34 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId, o
     db.saveQuestions(updated);
   };
 
+  const handleOpenFlashcardFromQuestion = (log: QuestionSession) => {
+    setFlashcardInitialData({
+      subjectId: log.subjectId,
+      subjectName: log.subjectName,
+      topicName: log.topicName,
+      front: `[${log.banca}] ${log.subjectName} - ${log.topicName}:\nQual é o fundamento correto e por que errei esta questão?`,
+      back: log.insightAncoragem?.trim()
+        ? `**Insight / Regra de Ouro:**\n${log.insightAncoragem.trim()}`
+        : `*Caderno de Erros:* Anote aqui a fundamentação da banca e por que esta alternativa é correta.`,
+      tags: ['caderno-de-erros', log.banca.toLowerCase(), 'revisao'],
+    });
+    setIsFlashcardModalOpen(true);
+  };
+
+  const handleSaveFlashcard = (card: Flashcard) => {
+    const existingCards = db.getFlashcards(activeWorkspaceId);
+    const updatedCards = [card, ...existingCards.filter((c) => c.id !== card.id)];
+    db.saveFlashcards(activeWorkspaceId, updatedCards);
+    setFlashcardSuccessMsg(`⚡ Flashcard criado com sucesso para "${card.topicName}"!`);
+    setTimeout(() => setFlashcardSuccessMsg(null), 4000);
+  };
+
   // Filter history list to only show questions of active workspace
   const activeWorkspaceQuestions = questions.filter(q => q.workspaceId === activeWorkspaceId);
+  const errorQuestionsCount = activeWorkspaceQuestions.filter(q => q.adicionarParaRevisao || q.correct < q.attempted).length;
+  const displayedQuestions = onlyErrorsFilter
+    ? activeWorkspaceQuestions.filter(q => q.adicionarParaRevisao || q.correct < q.attempted)
+    : activeWorkspaceQuestions;
 
   // Metrics calculation
   const totalAttempted = activeWorkspaceQuestions.reduce((sum, q) => sum + q.attempted, 0);
@@ -290,6 +324,9 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId, o
       id: sub.id,
       name: sub.name,
       count: Math.min(3, successfulSimuladosCount),
+      assuntoId: sub.assuntoId,
+      disciplinaId: sub.disciplinaId,
+      granQuery: sub.granQuery
     };
   });
 
@@ -396,6 +433,37 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId, o
                     backgroundColor: stat.count === 3 ? 'var(--color-success)' : 'var(--color-primary)'
                   }} />
                 </div>
+
+                {/* Gran Questoes shortcut */}
+                <a
+                  href={buildGranQuestoesUrl({
+                    assuntoId: stat.assuntoId,
+                    disciplinaId: stat.disciplinaId,
+                    query: stat.granQuery || stat.name,
+                    banca: 'FCC',
+                    filterBanca: true
+                  })}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '4px',
+                    padding: '4px',
+                    borderRadius: '4px',
+                    fontSize: '0.7rem',
+                    fontWeight: 700,
+                    color: '#c8102e',
+                    background: 'rgba(200, 16, 46, 0.08)',
+                    textDecoration: 'none',
+                    marginTop: '2px'
+                  }}
+                  title="Abrir questões no Gran Questões (Filtro Inteligente)"
+                >
+                  <span>🎯 Praticar no Gran</span>
+                  <ExternalLink size={10} />
+                </a>
               </div>
             ))
           )}
@@ -475,7 +543,7 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId, o
           <p>Você precisa cadastrar matérias no Planejamento antes de registrar questões.</p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '2rem' }} className="responsive-split-grid-three">
+        <div className="responsive-split-grid-three">
           
           {/* Left: Input Form */}
           <div className="placeholder-card card-primary" style={{ height: 'fit-content' }}>
@@ -678,9 +746,44 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId, o
 
           {/* Right: History List */}
           <div className="placeholder-card card-secondary">
-            <h3>Histórico de Questões</h3>
-            {activeWorkspaceQuestions.length === 0 ? (
-              <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>Nenhuma questão registrada recentemente para este ciclo.</p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <h3>Histórico de Questões</h3>
+              <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--bg-element)', padding: '3px', borderRadius: '6px' }}>
+                <button
+                  type="button"
+                  onClick={() => setOnlyErrorsFilter(false)}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: '4px',
+                    fontSize: '0.75rem',
+                    fontWeight: !onlyErrorsFilter ? 700 : 500,
+                    backgroundColor: !onlyErrorsFilter ? 'var(--bg-card)' : 'transparent',
+                    color: !onlyErrorsFilter ? 'var(--color-primary)' : 'var(--text-muted)',
+                  }}
+                >
+                  Todas ({activeWorkspaceQuestions.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOnlyErrorsFilter(true)}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: '4px',
+                    fontSize: '0.75rem',
+                    fontWeight: onlyErrorsFilter ? 700 : 500,
+                    backgroundColor: onlyErrorsFilter ? 'var(--bg-card)' : 'transparent',
+                    color: onlyErrorsFilter ? 'var(--color-danger)' : 'var(--text-muted)',
+                  }}
+                >
+                  ⚡ Caderno de Erros ({errorQuestionsCount})
+                </button>
+              </div>
+            </div>
+
+            {displayedQuestions.length === 0 ? (
+              <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>
+                {onlyErrorsFilter ? 'Nenhum erro registrado neste ciclo! Parabéns!' : 'Nenhuma questão registrada recentemente para este ciclo.'}
+              </p>
             ) : (
               <div style={{ overflowX: 'auto', width: '100%' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
@@ -694,12 +797,14 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId, o
                     </tr>
                   </thead>
                   <tbody>
-                    {activeWorkspaceQuestions.map((log) => {
+                    {displayedQuestions.map((log) => {
                       const rate = log.attempted > 0 ? (log.correct / log.attempted) * 100 : 0;
+                      const hasError = log.adicionarParaRevisao || log.correct < log.attempted;
+
                       return (
                         <tr key={log.id} style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-title)' }}>
                           <td style={{ padding: '0.75rem 0.5rem' }}>
-                            <div style={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                            <div style={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
                               {log.subjectName}
                               {log.adicionarParaRevisao && (
                                 <span style={{
@@ -718,6 +823,32 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId, o
                             {log.insightAncoragem && (
                               <div style={{ fontSize: '0.75rem', color: 'var(--color-primary)', fontStyle: 'italic', marginTop: '0.2rem' }}>
                                 &ldquo;{log.insightAncoragem}&rdquo;
+                              </div>
+                            )}
+
+                            {/* 1-Click Flashcard Creator Button for Errors */}
+                            {hasError && (
+                              <div style={{ marginTop: '0.35rem' }}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenFlashcardFromQuestion(log)}
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px',
+                                    padding: '3px 8px',
+                                    borderRadius: '4px',
+                                    fontSize: '0.7rem',
+                                    fontWeight: 700,
+                                    color: 'var(--color-primary)',
+                                    backgroundColor: 'var(--color-primary-glow)',
+                                    border: '1px solid rgba(129, 140, 248, 0.3)',
+                                    cursor: 'pointer',
+                                  }}
+                                  title="Criar Flashcard Anki a partir deste erro"
+                                >
+                                  <Zap size={11} fill="currentColor" /> Criar Flashcard
+                                </button>
                               </div>
                             )}
                           </td>
@@ -742,6 +873,7 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId, o
                             <button
                               onClick={() => handleDeleteLog(log.id)}
                               style={{ color: 'var(--color-danger)', border: 'none', background: 'none', cursor: 'pointer' }}
+                              title="Excluir registro"
                             >
                               <Trash2 size={16} />
                             </button>
@@ -755,6 +887,45 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId, o
             )}
           </div>
 
+        </div>
+      )}
+
+      {/* 1-Click Flashcard Creator Modal */}
+      <FlashcardModal
+        isOpen={isFlashcardModalOpen}
+        onClose={() => {
+          setIsFlashcardModalOpen(false);
+          setFlashcardInitialData(null);
+        }}
+        onSave={handleSaveFlashcard}
+        initialData={flashcardInitialData}
+        workspaceId={activeWorkspaceId}
+        subjects={subjects}
+      />
+
+      {/* Success Toast */}
+      {flashcardSuccessMsg && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: '24px',
+            right: '24px',
+            backgroundColor: 'var(--color-primary)',
+            color: 'var(--text-inverse)',
+            padding: '0.8rem 1.4rem',
+            borderRadius: '8px',
+            boxShadow: '0 10px 25px rgba(0,0,0,0.3)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            fontWeight: 700,
+            fontSize: '0.9rem',
+            zIndex: 99999,
+            animation: 'fadeInTab 0.2s ease-out',
+          }}
+        >
+          <CheckCircle size={18} />
+          <span>{flashcardSuccessMsg}</span>
         </div>
       )}
     </div>
