@@ -80,6 +80,14 @@ export const Header: React.FC<HeaderProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
 
+    const confirmed = window.confirm(
+      'Atenção: Restaurar um backup irá substituir todos os dados atuais (ciclos, matérias, sessões e flashcards) pelas informações do arquivo.\n\nDeseja continuar?'
+    );
+    if (!confirmed) {
+      e.target.value = '';
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
@@ -99,10 +107,12 @@ export const Header: React.FC<HeaderProps> = ({
     e.target.value = '';
   };
 
+  const savedUserName = typeof localStorage !== 'undefined' ? localStorage.getItem('concurso_estudos_user_name') : null;
+
   return (
     <header className="app-header">
       <div className="header-greeting">
-        <h2>Bons estudos, Vinícius!</h2>
+        <h2>{savedUserName ? `Bons estudos, ${savedUserName}!` : 'Bons estudos!'}</h2>
         <p className="header-subtitle">Foco e persistência rumo à aprovação no {concursoInfo?.concurso || 'TCE-GO'} • {concursoInfo?.banca || 'FCC'}.</p>
       </div>
 
@@ -160,7 +170,7 @@ export const Header: React.FC<HeaderProps> = ({
           onClick={handleExportBackup}
           className="header-action-btn"
           title="Exportar Backup Completo (JSON)"
-          aria-label="Exportar Backup"
+          aria-label="Exportar Backup (JSON)"
         >
           <Download size={14} />
           <span className="hide-mobile">Backup</span>
@@ -169,7 +179,7 @@ export const Header: React.FC<HeaderProps> = ({
         <label
           className="header-action-btn"
           title="Restaurar Backup Completo (JSON)"
-          aria-label="Restaurar Backup"
+          aria-label="Restaurar Backup (JSON)"
         >
           <Upload size={14} />
           <span className="hide-mobile">Restaurar</span>

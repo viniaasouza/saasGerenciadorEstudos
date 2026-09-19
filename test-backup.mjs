@@ -114,12 +114,34 @@ const db = {
     localStorage.setItem(KEYS.AUTOPILOT_SETTINGS(wsId), JSON.stringify(stt));
   },
 
+  deleteWorkspaceKeys(workspaceId) {
+    localStorage.removeItem(KEYS.SUBJECTS(workspaceId));
+    localStorage.removeItem(KEYS.CYCLE_CONFIG(workspaceId));
+    localStorage.removeItem(KEYS.CYCLE_BLOCKS(workspaceId));
+    localStorage.removeItem(KEYS.CYCLE_WEEK(workspaceId));
+    localStorage.removeItem(KEYS.CONCURSO_INFO(workspaceId));
+    localStorage.removeItem(KEYS.REVISOES(workspaceId));
+    localStorage.removeItem(KEYS.FLASHCARDS(workspaceId));
+    localStorage.removeItem(KEYS.AUTOPILOT_SETTINGS(workspaceId));
+  },
+
+  clearAll() {
+    const workspaces = this.getWorkspaces();
+    workspaces.forEach((ws) => this.deleteWorkspaceKeys(ws.id));
+    localStorage.removeItem(KEYS.WORKSPACES);
+    localStorage.removeItem(KEYS.ACTIVE_WORKSPACE_ID);
+    localStorage.removeItem(KEYS.SESSIONS);
+    localStorage.removeItem(KEYS.QUESTIONS);
+    localStorage.removeItem(KEYS.ACTIVE_TIMER);
+  },
+
   // EXACT METHODS IMPLEMENTED IN src/db/database.ts
   exportAllData() {
     const workspaces = this.getWorkspaces();
     const activeWorkspaceId = this.getActiveWorkspaceId();
     const sessions = this.getSessions();
     const questions = this.getQuestions();
+    const theme = typeof localStorage !== 'undefined' ? localStorage.getItem('concurso_estudos_theme') : null;
 
     const workspaceData = {};
 
@@ -153,6 +175,7 @@ const db = {
       app: 'estud.ai',
       version: 1,
       exportedAt: new Date().toISOString(),
+      theme: theme || 'dark',
       workspaces,
       activeWorkspaceId,
       sessions,
@@ -170,12 +193,38 @@ const db = {
         return { success: false, message: 'Conteúdo do arquivo vazio ou inválido.' };
       }
 
-      const data = JSON.parse(jsonStr);
-      if (!data || typeof data !== 'object') {
-        return { success: false, message: 'Formato JSON inválido.' };
+      let data;
+      try {
+        data = JSON.parse(jsonStr);
+      } catch {
+        return { success: false, message: 'Arquivo não contém um JSON válido.' };
       }
 
-      if (data.rawKeys && typeof data.rawKeys === 'object') {
+      if (!data || typeof data !== 'object' || Array.isArray(data)) {
+        return { success: false, message: 'Formato de backup inválido (esperado objeto JSON).' };
+      }
+
+      const hasWorkspaces = Array.isArray(data.workspaces) && data.workspaces.length > 0;
+      const hasRawKeys = Boolean(data.rawKeys && typeof data.rawKeys === 'object' && Object.keys(data.rawKeys).length > 0);
+      const hasWorkspaceData = Boolean(data.workspaceData && typeof data.workspaceData === 'object' && Object.keys(data.workspaceData).length > 0);
+
+      if (!hasWorkspaces && !hasRawKeys && !hasWorkspaceData) {
+        return { success: false, message: 'Estrutura de backup incompatível ou vazia (nenhum ciclo ou dado reconhecido).' };
+      }
+
+      // Clean up previous workspaces and active timer to prevent orphaned phantom keys
+      try {
+        const currentWs = this.getWorkspaces();
+        currentWs.forEach((ws) => this.deleteWorkspaceKeys(ws.id));
+        if (typeof localStorage !== 'undefined') {
+          localStorage.removeItem(KEYS.ACTIVE_TIMER);
+        }
+      } catch {
+        // Non-fatal
+      }
+
+      // 1. If rawKeys exists, restore them directly to preserve full fidelity
+      if (hasRawKeys) {
         Object.entries(data.rawKeys).forEach(([k, v]) => {
           if (typeof v === 'string') {
             localStorage.setItem(k, v);
@@ -183,6 +232,12 @@ const db = {
         });
       }
 
+      // 2. Restore global theme if present
+      if (data.theme && typeof data.theme === 'string') {
+        localStorage.setItem('concurso_estudos_theme', data.theme);
+      }
+
+      // 3. Structured restoration (guarantees consistency)
       let importedWsCount = 0;
       if (Array.isArray(data.workspaces)) {
         this.saveWorkspaces(data.workspaces);
@@ -320,16 +375,35 @@ assert.strictEqual(restoredCards[0].front, 'O que é ACID?', 'Flashcard front ma
 
 console.log('✔ Test 3 passed: 100% data restoration fidelity verified');
 
-// Test 4: Edge cases & corrupted inputs
-const emptyRes = db.importAllData('');
-assert.strictEqual(emptyRes.success, false, 'Empty string should fail gracefully');
+// Test 4: Rigorous edge cases & corrupted inputs
+assert.strictEqual(db.importAllData('').success, false, 'Empty string should fail');
+assert.strictEqual(db.importAllData(null).success, false, 'Null should fail');
+assert.strictEqual(db.importAllData(undefined).success, false, 'Undefined should fail');
+assert.strictEqual(db.importAllData('{ corrupted json ...').success, false, 'Malformed json should fail');
+assert.strictEqual(db.importAllData('"just a string"').success, false, 'Non-object json string should fail');
+assert.strictEqual(db.importAllData('123').success, false, 'Primitive number should fail');
+assert.strictEqual(db.importAllData('true').success, false, 'Primitive boolean should fail');
+assert.strictEqual(db.importAllData('[]').success, false, 'JSON array should fail');
+assert.strictEqual(db.importAllData('[1, 2, 3]').success, false, 'JSON array with items should fail');
+assert.strictEqual(db.importAllData('{}').success, false, 'Empty object without backup keys should fail');
+assert.strictEqual(db.importAllData('{"someRandom": 123}').success, false, 'Object without recognized backup keys should fail');
+console.log('✔ Test 4 passed: Strict rejection of arrays, primitives, and unformatted objects verified');
 
-const malformedRes = db.importAllData('{ corrupted json ...');
-assert.strictEqual(malformedRes.success, false, 'Malformed json should fail gracefully');
+// Test 5: Orphaned workspace and phantom data cleanup on restore
+const oldWsId = 'ws-old-ghost';
+db.saveWorkspaces([{ id: oldWsId, name: 'Old Ghost Workspace', createdAt: '2025-01-01' }]);
+db.saveSubjects(oldWsId, [{ id: 'sub-ghost', name: 'Ghost Subject', weight: 1, topics: [] }]);
+localStorage.setItem(KEYS.ACTIVE_TIMER, JSON.stringify({ isActive: true, subjectName: 'Ghost' }));
 
-const primitiveRes = db.importAllData('"just a string"');
-assert.strictEqual(primitiveRes.success, false, 'Non-object json should fail gracefully');
+assert.strictEqual(db.getSubjects(oldWsId).length, 1, 'Old subjects should exist prior to restore');
+assert.notEqual(localStorage.getItem(KEYS.ACTIVE_TIMER), null, 'Old active timer should exist');
 
-console.log('✔ Test 4 passed: Edge cases and corrupted inputs handled safely without crashes');
+const restoreCleanRes = db.importAllData(exportedJson);
+assert.strictEqual(restoreCleanRes.success, true, 'Restore must succeed');
+assert.strictEqual(db.getSubjects(oldWsId).length, 0, 'Old ghost subjects must be pruned on restore');
+assert.strictEqual(localStorage.getItem(KEYS.ACTIVE_TIMER), null, 'Old active timer must be reset on restore');
+assert.strictEqual(db.getWorkspaces().length, 1, 'Only imported workspaces should be present');
+assert.strictEqual(db.getWorkspaces()[0].id, testWsId, 'Correct workspace id restored');
+console.log('✔ Test 5 passed: Pre-existing orphaned workspaces and active timer pruned cleanly on restore');
 
 console.log('=== ALL BACKUP & RESTORE TESTS PASSED SUCCESSFULLY! ===');

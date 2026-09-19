@@ -756,6 +756,7 @@ export const db = {
     const activeWorkspaceId = this.getActiveWorkspaceId();
     const sessions = this.getSessions();
     const questions = this.getQuestions();
+    const theme = typeof localStorage !== 'undefined' ? localStorage.getItem('concurso_estudos_theme') : null;
 
     const workspaceData: Record<string, {
       subjects?: Subject[];
@@ -799,6 +800,7 @@ export const db = {
       app: 'estud.ai',
       version: 1,
       exportedAt: new Date().toISOString(),
+      theme: theme || 'dark',
       workspaces,
       activeWorkspaceId,
       sessions,
@@ -816,13 +818,38 @@ export const db = {
         return { success: false, message: 'Conteúdo do arquivo vazio ou inválido.' };
       }
 
-      const data = JSON.parse(jsonStr);
-      if (!data || typeof data !== 'object') {
-        return { success: false, message: 'Formato JSON inválido.' };
+      let data: any;
+      try {
+        data = JSON.parse(jsonStr);
+      } catch {
+        return { success: false, message: 'Arquivo não contém um JSON válido.' };
+      }
+
+      if (!data || typeof data !== 'object' || Array.isArray(data)) {
+        return { success: false, message: 'Formato de backup inválido (esperado objeto JSON).' };
+      }
+
+      const hasWorkspaces = Array.isArray(data.workspaces) && data.workspaces.length > 0;
+      const hasRawKeys = Boolean(data.rawKeys && typeof data.rawKeys === 'object' && Object.keys(data.rawKeys).length > 0);
+      const hasWorkspaceData = Boolean(data.workspaceData && typeof data.workspaceData === 'object' && Object.keys(data.workspaceData).length > 0);
+
+      if (!hasWorkspaces && !hasRawKeys && !hasWorkspaceData) {
+        return { success: false, message: 'Estrutura de backup incompatível ou vazia (nenhum ciclo ou dado reconhecido).' };
+      }
+
+      // Clean up previous workspaces and active timer to prevent orphaned phantom keys
+      try {
+        const currentWs = this.getWorkspaces();
+        currentWs.forEach((ws) => this.deleteWorkspaceKeys(ws.id));
+        if (typeof localStorage !== 'undefined') {
+          localStorage.removeItem(KEYS.ACTIVE_TIMER);
+        }
+      } catch {
+        // Non-fatal if cleanup encounters environment restriction
       }
 
       // 1. If rawKeys exists, restore them directly to preserve full fidelity
-      if (data.rawKeys && typeof data.rawKeys === 'object') {
+      if (hasRawKeys) {
         Object.entries(data.rawKeys).forEach(([k, v]) => {
           if (typeof v === 'string') {
             localStorage.setItem(k, v);
@@ -830,7 +857,12 @@ export const db = {
         });
       }
 
-      // 2. Structured restoration (guarantees consistency)
+      // 2. Restore global theme if present
+      if (data.theme && typeof data.theme === 'string') {
+        localStorage.setItem('concurso_estudos_theme', data.theme);
+      }
+
+      // 3. Structured restoration (guarantees consistency)
       let importedWsCount = 0;
       if (Array.isArray(data.workspaces)) {
         this.saveWorkspaces(data.workspaces);
@@ -916,5 +948,6 @@ export const db = {
     localStorage.removeItem(KEYS.ACTIVE_WORKSPACE_ID);
     localStorage.removeItem(KEYS.SESSIONS);
     localStorage.removeItem(KEYS.QUESTIONS);
+    localStorage.removeItem(KEYS.ACTIVE_TIMER);
   }
 };
