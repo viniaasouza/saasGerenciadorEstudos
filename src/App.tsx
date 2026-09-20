@@ -10,20 +10,41 @@ import { ReviewsTab } from './modules/reviews/ReviewsTab';
 import { FlashcardsTab } from './modules/flashcards/FlashcardsTab';
 import { QuestionsTab } from './modules/questions/QuestionsTab';
 import { AnalyticsTab } from './modules/analytics/AnalyticsTab';
+import { AdminTab } from './modules/admin/AdminTab';
+import { LandingPage } from './modules/landing/LandingPage';
+import { AuthModal } from './components/AuthModal';
+import { FeedbackModal } from './components/FeedbackModal';
+import { AiSyllabusImportModal } from './modules/syllabus/AiSyllabusImportModal';
+import { useAuth } from './context/AuthContext';
 import { db } from './db/database';
 import { promoteSubjectAndReallocate, generateStudyCycle } from './modules/cycle/cycleGenerator';
-import { TCE_GO_SUBJECTS_PRESET, TCE_GO_CONCURSO_INFO } from './data/tceGoPreset';
 import type { CicloWorkspace, ConcursoInfo } from './types';
 import './index.css';
 
 function App() {
+  const { user } = useAuth();
+
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     const saved = localStorage.getItem('concurso_estudos_theme');
     if (saved === 'dark' || saved === 'light') return saved;
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   });
 
+  // Landing Page toggle state
+  const [showLandingPage, setShowLandingPage] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    if (window.location.hash === '#landing') return true;
+    const hasEntered = localStorage.getItem('estud_ai_entered_app');
+    return !hasEntered;
+  });
+
   const [activeTab, setActiveTab] = useState<string>('autopilot');
+
+  // Modals states
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<'login' | 'signup'>('login');
+  const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
+  const [isAiImportOpen, setIsAiImportOpen] = useState(false);
 
   // Multi-Workspace States
   const [workspaces, setWorkspaces] = useState<CicloWorkspace[]>([]);
@@ -60,47 +81,52 @@ function App() {
     localStorage.setItem('concurso_estudos_theme', theme);
   }, [theme]);
 
-  // Workspace Initialization effect
+  // Clean Workspace Initialization effect — reacts to logged-in user changes for multi-user isolation
+  const userId = user?.id;
   useEffect(() => {
+    db.setCurrentUserId(userId || null);
     let wsList = db.getWorkspaces();
     let activeId = db.getActiveWorkspaceId();
 
     if (wsList.length === 0) {
       const defaultWs: CicloWorkspace = {
         id: `workspace-${Date.now()}`,
-        name: 'TCE-GO (Analista TI)',
-        createdAt: new Date().toISOString()
+        name: 'Meu Concurso',
+        createdAt: new Date().toISOString(),
       };
       wsList = [defaultWs];
       db.saveWorkspaces(wsList);
       activeId = defaultWs.id;
       db.setActiveWorkspaceId(defaultWs.id);
 
-      // Clean onboarding: populate default TCE-GO syllabus preset and auto-generated study cycle
-      // without leaking personal study sessions or question logs
-      db.saveSubjects(defaultWs.id, TCE_GO_SUBJECTS_PRESET);
-      db.saveConcursoInfo(defaultWs.id, TCE_GO_CONCURSO_INFO);
-      const defaultBlocks = generateStudyCycle(
-        TCE_GO_SUBJECTS_PRESET,
-        20,
-        90
-      );
-      db.saveCycleBlocks(defaultWs.id, defaultBlocks);
+      // Clean onboarding: empty subjects so user starts fresh with clean data
+      db.saveSubjects(defaultWs.id, []);
+      db.saveConcursoInfo(defaultWs.id, {
+        concurso: 'Meu Concurso',
+        cargo: 'Cargo Alvo',
+        banca: 'A Definir',
+        dataProva: '2027-01-17',
+      });
+      db.saveCycleBlocks(defaultWs.id, []);
     }
 
-    if (!activeId || !wsList.some(w => w.id === activeId)) {
+    if (!activeId || !wsList.some((w) => w.id === activeId)) {
       activeId = wsList[0].id;
       db.setActiveWorkspaceId(activeId);
     }
 
     setWorkspaces(wsList);
     setActiveWorkspaceId(activeId);
-  }, []);
+    setSelectedBlockForTimer(null);
+    setActiveBlockId(null);
+    setPromotionCandidate(null);
+    setRefreshStatsTrigger((p) => p + 1);
+  }, [userId]);
 
   // Recalculate study stats for the active workspace in the header badge
   useEffect(() => {
     if (!activeWorkspaceId) return;
-    
+
     const config = db.getCycleConfig(activeWorkspaceId);
     setWeeklyHoursTarget(config.weeklyHours);
 
@@ -119,6 +145,11 @@ function App() {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   };
 
+  const handleEnterApp = () => {
+    localStorage.setItem('estud_ai_entered_app', 'true');
+    setShowLandingPage(false);
+  };
+
   // Workspace actions
   const handleSelectWorkspace = (id: string) => {
     setActiveWorkspaceId(id);
@@ -132,7 +163,7 @@ function App() {
     const newWs: CicloWorkspace = {
       id: `workspace-${Date.now()}`,
       name,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
     };
     const updated = [...workspaces, newWs];
     setWorkspaces(updated);
@@ -149,20 +180,18 @@ function App() {
     });
     setWorkspaces(updated);
     db.saveWorkspaces(updated);
-    setRefreshStatsTrigger(prev => prev + 1);
+    setRefreshStatsTrigger((prev) => prev + 1);
   };
 
   const handleDeleteWorkspace = (id: string) => {
     if (workspaces.length <= 1) return;
 
-    // Delete workspace keys from local storage
     db.deleteWorkspaceKeys(id);
 
-    const updated = workspaces.filter(w => w.id !== id);
+    const updated = workspaces.filter((w) => w.id !== id);
     setWorkspaces(updated);
     db.saveWorkspaces(updated);
 
-    // If the active one was deleted, select another active workspace
     if (id === activeWorkspaceId) {
       handleSelectWorkspace(updated[0].id);
     }
@@ -188,14 +217,14 @@ function App() {
   const handleSessionSaved = () => {
     if (activeBlockId && activeWorkspaceId) {
       const blocks = db.getCycleBlocks(activeWorkspaceId);
-      const idx = blocks.findIndex(b => b.id === activeBlockId);
+      const idx = blocks.findIndex((b) => b.id === activeBlockId);
       if (idx !== -1) {
         blocks[idx].completed = true;
         blocks[idx].completedAt = new Date().toISOString();
         db.saveCycleBlocks(activeWorkspaceId, blocks);
       }
     }
-    
+
     setActiveBlockId(null);
     setSelectedBlockForTimer(null);
     setRefreshStatsTrigger((prev) => prev + 1);
@@ -212,10 +241,8 @@ function App() {
     const list = db.getSubjects(activeWorkspaceId);
     const { updatedSubjects, promotedBacklogSubjectName } = promoteSubjectAndReallocate(list, candidateId);
 
-    // Save status modifications
     db.saveSubjects(activeWorkspaceId, updatedSubjects);
 
-    // Recalculate schedule blocks dynamically
     const config = db.getCycleConfig(activeWorkspaceId);
     const newBlocks = generateStudyCycle(updatedSubjects, config.weeklyHours, 90, config.dailyHours);
     db.saveCycleBlocks(activeWorkspaceId, newBlocks);
@@ -229,7 +256,7 @@ function App() {
 
     alert(msg);
     setPromotionCandidate(null);
-    setRefreshStatsTrigger(p => p + 1); // trigger updates
+    setRefreshStatsTrigger((p) => p + 1);
   };
 
   // Load concursoInfo for active workspace
@@ -239,9 +266,39 @@ function App() {
     setConcursoInfo(info);
   }, [activeWorkspaceId]);
 
+  // If user opens Landing Page view
+  if (showLandingPage) {
+    return (
+      <div className={`app-root ${theme}`}>
+        <LandingPage
+          onEnterApp={handleEnterApp}
+          onOpenAuth={(mode) => {
+            setAuthModalMode(mode || 'login');
+            setIsAuthModalOpen(true);
+          }}
+          onOpenFeedback={() => setIsFeedbackModalOpen(true)}
+          theme={theme}
+          toggleTheme={toggleTheme}
+        />
+
+        <AuthModal
+          isOpen={isAuthModalOpen}
+          onClose={() => setIsAuthModalOpen(false)}
+          initialMode={authModalMode}
+          onSuccess={handleEnterApp}
+        />
+
+        <FeedbackModal
+          isOpen={isFeedbackModalOpen}
+          onClose={() => setIsFeedbackModalOpen(false)}
+        />
+      </div>
+    );
+  }
+
   const renderActiveTab = () => {
     if (!activeWorkspaceId) return null;
-    
+
     switch (activeTab) {
       case 'autopilot':
         return (
@@ -310,6 +367,16 @@ function App() {
         );
       case 'analytics':
         return <AnalyticsTab key={activeWorkspaceId} activeWorkspaceId={activeWorkspaceId} />;
+      case 'admin':
+        return (
+          <AdminTab
+            key={activeWorkspaceId}
+            onOpenAuthModal={() => {
+              setAuthModalMode('login');
+              setIsAuthModalOpen(true);
+            }}
+          />
+        );
       default:
         return (
           <AutopilotTab
@@ -324,7 +391,17 @@ function App() {
 
   return (
     <div className="app-layout">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} concursoInfo={concursoInfo} />
+      <Sidebar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        concursoInfo={concursoInfo}
+        onOpenFeedback={() => setIsFeedbackModalOpen(true)}
+        onToggleLandingPage={() => setShowLandingPage(true)}
+        onOpenAuth={() => {
+          setAuthModalMode('login');
+          setIsAuthModalOpen(true);
+        }}
+      />
       <div className="main-container">
         {workspaces.length > 0 && (
           <WorkspaceTabBar
@@ -344,30 +421,40 @@ function App() {
           concursoInfo={concursoInfo}
           activeTab={activeTab}
           onNavigateToTimer={() => setActiveTab('timer')}
+          onOpenAuth={() => {
+            setAuthModalMode('login');
+            setIsAuthModalOpen(true);
+          }}
+          onOpenFeedback={() => setIsFeedbackModalOpen(true)}
+          onOpenAiImport={() => setIsAiImportOpen(true)}
+          onToggleLandingPage={() => setShowLandingPage(true)}
         />
         <main className="content-area">
-          <div className="fade-in-tab">
-            {renderActiveTab()}
-          </div>
+          <div className="fade-in-tab">{renderActiveTab()}</div>
         </main>
       </div>
 
       {/* Promotion Dialog / Modal */}
       {promotionCandidate && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.75)',
-          backdropFilter: 'blur(8px)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 9999
-        }}>
-          <div className="placeholder-card card-primary modal-dialog" style={{ width: '90%', maxWidth: '500px', gap: '1.5rem', padding: '2.5rem' }}>
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 9999,
+          }}
+        >
+          <div
+            className="placeholder-card card-primary modal-dialog"
+            style={{ width: '90%', maxWidth: '500px', gap: '1.5rem', padding: '2.5rem' }}
+          >
             <h3 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--color-success)', fontSize: '1.4rem' }}>
               🎉 Consistência Atingida!
             </h3>
@@ -382,16 +469,46 @@ function App() {
             </div>
 
             <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
-              <button onClick={() => setPromotionCandidate(null)} className="mock-btn text-muted" style={{ flex: 1, padding: '0.8rem' }}>
+              <button
+                onClick={() => setPromotionCandidate(null)}
+                className="mock-btn text-muted"
+                style={{ flex: 1, padding: '0.8rem' }}
+              >
                 Manter Ativa
               </button>
-              <button onClick={() => handleAcceptPromotion(promotionCandidate.id)} className="mock-btn" style={{ flex: 1, padding: '0.8rem', fontWeight: 'bold' }}>
+              <button
+                onClick={() => handleAcceptPromotion(promotionCandidate.id)}
+                className="mock-btn"
+                style={{ flex: 1, padding: '0.8rem', fontWeight: 'bold' }}
+              >
                 Migrar e Ativar Backlog
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Modals */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        initialMode={authModalMode}
+      />
+
+      <FeedbackModal
+        isOpen={isFeedbackModalOpen}
+        onClose={() => setIsFeedbackModalOpen(false)}
+      />
+
+      <AiSyllabusImportModal
+        isOpen={isAiImportOpen}
+        onClose={() => setIsAiImportOpen(false)}
+        onWorkspaceCreated={(wsId) => {
+          const updated = db.getWorkspaces();
+          setWorkspaces(updated);
+          handleSelectWorkspace(wsId);
+        }}
+      />
     </div>
   );
 }

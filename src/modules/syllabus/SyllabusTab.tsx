@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../db/database';
-import { buildGranQuestoesUrl } from '../../data/tceGoPreset';
+import { buildGranQuestoesUrl, TCE_GO_SUBJECTS_PRESET, TCE_GO_CONCURSO_INFO } from '../../data/tceGoPreset';
 import type { Subject, Topic, Subtopic } from '../../types';
+import { AiSyllabusImportModal } from './AiSyllabusImportModal';
 import { 
   CheckCircle2, Circle, ChevronDown, ChevronUp, ExternalLink, 
   Search, BookOpen, Play, Video, FileText, StickyNote,
-  Tv, Edit3, X, Save, Link as LinkIcon
+  Tv, Edit3, X, Save, Link as LinkIcon, Sparkles
 } from 'lucide-react';
 
 const normalizeUrl = (url?: string): string => {
@@ -62,6 +63,8 @@ export const SyllabusTab: React.FC<SyllabusTabProps> = ({ activeWorkspaceId, onS
     pdfUrl: string;
     notes: string;
   } | null>(null);
+
+  const [isAiImportOpen, setIsAiImportOpen] = useState(false);
 
   useEffect(() => {
     if (!activeWorkspaceId) return;
@@ -393,17 +396,35 @@ export const SyllabusTab: React.FC<SyllabusTabProps> = ({ activeWorkspaceId, onS
           </p>
         </div>
 
-        {/* GRAN QUESTÕES BANCA TOGGLE */}
-        <div className="gran-options" style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--card-bg, #ffffff)', padding: '8px 14px', borderRadius: '10px', border: '1px solid var(--border-color, #e2e8f0)' }}>
-          <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Gran Questões:</span>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', cursor: 'pointer' }}>
-            <input 
-              type="checkbox" 
-              checked={filterBanca} 
-              onChange={(e) => setFilterBanca(e.target.checked)} 
-            />
-            Filtrar por <strong>{bancaName}</strong>
-          </label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => setIsAiImportOpen(true)}
+            className="mock-btn"
+            style={{
+              padding: '8px 14px',
+              fontSize: '0.85rem',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+          >
+            <Sparkles size={16} />
+            <span>Importar com IA</span>
+          </button>
+
+          {/* GRAN QUESTÕES BANCA TOGGLE */}
+          <div className="gran-options" style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--card-bg, #ffffff)', padding: '8px 14px', borderRadius: '10px', border: '1px solid var(--border-color, #e2e8f0)' }}>
+            <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Gran Questões:</span>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', cursor: 'pointer' }}>
+              <input 
+                type="checkbox" 
+                checked={filterBanca} 
+                onChange={(e) => setFilterBanca(e.target.checked)} 
+              />
+              Filtrar por <strong>{bancaName}</strong>
+            </label>
+          </div>
         </div>
       </div>
 
@@ -554,8 +575,64 @@ export const SyllabusTab: React.FC<SyllabusTabProps> = ({ activeWorkspaceId, onS
       {/* SUBJECTS ACCORDION LIST */}
       <div className="subjects-accordion-list" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
         {subjects.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '40px', opacity: 0.6 }}>
-            Nenhuma disciplina cadastrada neste workspace. Vá até a aba Planejamento e carregue o Edital TCE-GO!
+          <div
+            className="card-primary"
+            style={{
+              padding: '3rem 2rem',
+              textAlign: 'center',
+              borderRadius: '16px',
+              border: '1px solid var(--border-color)',
+            }}
+          >
+            <div
+              style={{
+                width: '56px',
+                height: '56px',
+                borderRadius: '16px',
+                backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                color: 'var(--color-accent)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 1.25rem',
+              }}
+            >
+              <Sparkles size={28} />
+            </div>
+            <h3 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: '0.5rem' }}>
+              Nenhuma Disciplina Cadastrada Neste Ciclo
+            </h3>
+            <p style={{ fontSize: '0.95rem', color: 'var(--text-muted)', maxWidth: '560px', margin: '0 auto 1.75rem', lineHeight: '1.6' }}>
+              Importe seu edital verticalizado em 1 clique com nossa IA gratuita ou carregue um modelo de demonstração para testar as ferramentas.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => setIsAiImportOpen(true)}
+                className="mock-btn"
+                style={{
+                  padding: '0.8rem 1.6rem',
+                  fontWeight: 700,
+                  fontSize: '0.95rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                <Sparkles size={16} />
+                <span>Importar Edital com IA</span>
+              </button>
+              <button
+                onClick={() => {
+                  db.saveSubjects(activeWorkspaceId, TCE_GO_SUBJECTS_PRESET);
+                  db.saveConcursoInfo(activeWorkspaceId, TCE_GO_CONCURSO_INFO);
+                  setSubjects(TCE_GO_SUBJECTS_PRESET);
+                }}
+                className="mock-btn text-muted"
+                style={{ padding: '0.8rem 1.4rem', fontSize: '0.95rem' }}
+              >
+                Carregar Modelo Exemplo (TCE-GO TI)
+              </button>
+            </div>
           </div>
         ) : (
           subjects.map((sub) => {
@@ -1636,6 +1713,15 @@ export const SyllabusTab: React.FC<SyllabusTabProps> = ({ activeWorkspaceId, onS
           </div>
         </div>
       )}
+
+      {/* AI Syllabus Import Modal */}
+      <AiSyllabusImportModal
+        isOpen={isAiImportOpen}
+        onClose={() => setIsAiImportOpen(false)}
+        onWorkspaceCreated={(wsId) => {
+          setSubjects(db.getSubjects(wsId));
+        }}
+      />
     </div>
   );
 };

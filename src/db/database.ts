@@ -19,23 +19,74 @@ const KEYS = {
   AUTOPILOT_SETTINGS: (wsId: string) => `concurso_estudos_autopilot_settings_${wsId}`,
 };
 
+let currentUserId: string | null = null;
+
 export const db = {
+  // MULTI-USER ISOLATION HELPERS
+  setCurrentUserId(userId: string | null): void {
+    currentUserId = userId;
+  },
+
+  getCurrentUserId(): string | null {
+    if (currentUserId) return currentUserId;
+    if (typeof localStorage !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('estud_ai_auth_user');
+        if (saved) {
+          const u = JSON.parse(saved);
+          if (u?.id) {
+            currentUserId = u.id;
+            return u.id;
+          }
+        }
+      } catch {}
+    }
+    return null;
+  },
+
+  getUserScopedKey(baseKey: string): string {
+    const uid = this.getCurrentUserId();
+    if (!uid) return `concurso_estudos_${baseKey}`;
+    return `concurso_estudos_${uid}_${baseKey}`;
+  },
+
   // WORKSPACE METADATA HELPERS
   getWorkspaces(): CicloWorkspace[] {
-    const data = localStorage.getItem(KEYS.WORKSPACES);
+    const key = this.getUserScopedKey('workspaces');
+    let data = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
+    // Backwards compatibility migration for demo/initial user
+    if (!data && typeof localStorage !== 'undefined' && (!this.getCurrentUserId() || this.getCurrentUserId() === 'usr-demo-student')) {
+      const legacy = localStorage.getItem(KEYS.WORKSPACES);
+      if (legacy) {
+        data = legacy;
+        localStorage.setItem(key, legacy);
+      }
+    }
     return data ? JSON.parse(data) : [];
   },
 
   saveWorkspaces(workspaces: CicloWorkspace[]): void {
-    localStorage.setItem(KEYS.WORKSPACES, JSON.stringify(workspaces));
+    const key = this.getUserScopedKey('workspaces');
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(key, JSON.stringify(workspaces));
+    }
   },
 
   getActiveWorkspaceId(): string | null {
-    return localStorage.getItem(KEYS.ACTIVE_WORKSPACE_ID);
+    const key = this.getUserScopedKey('active_workspace_id');
+    let id = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
+    if (!id && typeof localStorage !== 'undefined' && (!this.getCurrentUserId() || this.getCurrentUserId() === 'usr-demo-student')) {
+      id = localStorage.getItem(KEYS.ACTIVE_WORKSPACE_ID);
+      if (id) localStorage.setItem(key, id);
+    }
+    return id;
   },
 
   setActiveWorkspaceId(id: string): void {
-    localStorage.setItem(KEYS.ACTIVE_WORKSPACE_ID, id);
+    const key = this.getUserScopedKey('active_workspace_id');
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(key, id);
+    }
   },
 
   // WORKSPACE SPECIFIC DATA HELPERS (using workspaceId)
@@ -317,23 +368,39 @@ export const db = {
     return reallocated;
   },
 
-  // GLOBAL DATA HELPERS WITH WORKSPACE TAGS
+  // GLOBAL DATA HELPERS WITH WORKSPACE TAGS & USER SCOPING
   getSessions(): StudySession[] {
-    const data = localStorage.getItem(KEYS.SESSIONS);
+    const key = this.getUserScopedKey('sessions');
+    let data = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
+    if (!data && typeof localStorage !== 'undefined' && (!this.getCurrentUserId() || this.getCurrentUserId() === 'usr-demo-student')) {
+      data = localStorage.getItem(KEYS.SESSIONS);
+      if (data) localStorage.setItem(key, data);
+    }
     return data ? JSON.parse(data) : [];
   },
 
   saveSessions(sessions: StudySession[]): void {
-    localStorage.setItem(KEYS.SESSIONS, JSON.stringify(sessions));
+    const key = this.getUserScopedKey('sessions');
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(key, JSON.stringify(sessions));
+    }
   },
 
   getQuestions(): QuestionSession[] {
-    const data = localStorage.getItem(KEYS.QUESTIONS);
+    const key = this.getUserScopedKey('questions');
+    let data = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
+    if (!data && typeof localStorage !== 'undefined' && (!this.getCurrentUserId() || this.getCurrentUserId() === 'usr-demo-student')) {
+      data = localStorage.getItem(KEYS.QUESTIONS);
+      if (data) localStorage.setItem(key, data);
+    }
     return data ? JSON.parse(data) : [];
   },
 
   saveQuestions(questions: QuestionSession[]): void {
-    localStorage.setItem(KEYS.QUESTIONS, JSON.stringify(questions));
+    const key = this.getUserScopedKey('questions');
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(key, JSON.stringify(questions));
+    }
   },
 
   // CONCURSO INFO HELPERS
@@ -342,9 +409,9 @@ export const db = {
     const data = localStorage.getItem(KEYS.CONCURSO_INFO(workspaceId));
     if (data) return JSON.parse(data);
     return {
-      concurso: 'TCE-GO',
-      cargo: 'Técnico de Controle Externo - TI',
-      banca: 'Fundação Carlos Chagas (FCC)',
+      concurso: 'Meu Concurso',
+      cargo: 'Cargo Alvo',
+      banca: 'A Definir',
       dataProva: '2027-01-17'
     };
   },
@@ -392,7 +459,8 @@ export const db = {
   // PERSISTENT ACTIVE TIMER HELPERS
   getActiveTimer(): RunningTimerState | null {
     try {
-      const data = localStorage.getItem(KEYS.ACTIVE_TIMER);
+      const key = this.getUserScopedKey('active_timer');
+      const data = typeof localStorage !== 'undefined' ? (localStorage.getItem(key) || localStorage.getItem(KEYS.ACTIVE_TIMER)) : null;
       return data ? JSON.parse(data) : null;
     } catch {
       return null;
@@ -400,10 +468,14 @@ export const db = {
   },
 
   saveActiveTimer(timer: RunningTimerState | null): void {
-    if (!timer) {
-      localStorage.removeItem(KEYS.ACTIVE_TIMER);
-    } else {
-      localStorage.setItem(KEYS.ACTIVE_TIMER, JSON.stringify(timer));
+    const key = this.getUserScopedKey('active_timer');
+    if (typeof localStorage !== 'undefined') {
+      if (!timer) {
+        localStorage.removeItem(key);
+        localStorage.removeItem(KEYS.ACTIVE_TIMER);
+      } else {
+        localStorage.setItem(key, JSON.stringify(timer));
+      }
     }
   },
 
@@ -782,12 +854,17 @@ export const db = {
       };
     });
 
-    // Also collect all raw localStorage entries starting with concurso_estudos_ or estud_ai_
+    // Collect raw entries excluding sensitive auth session keys
     const rawKeys: Record<string, string> = {};
     if (typeof localStorage !== 'undefined') {
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key && (key.startsWith('concurso_estudos_') || key.startsWith('estud_ai_'))) {
+        if (
+          key &&
+          key.startsWith('concurso_estudos_') &&
+          !key.includes('auth') &&
+          !key.includes('mock_users')
+        ) {
           const val = localStorage.getItem(key);
           if (val !== null) {
             rawKeys[key] = val;
@@ -943,11 +1020,20 @@ export const db = {
 
   clearAll(): void {
     const workspaces = this.getWorkspaces();
-    workspaces.forEach(ws => this.deleteWorkspaceKeys(ws.id));
-    localStorage.removeItem(KEYS.WORKSPACES);
-    localStorage.removeItem(KEYS.ACTIVE_WORKSPACE_ID);
-    localStorage.removeItem(KEYS.SESSIONS);
-    localStorage.removeItem(KEYS.QUESTIONS);
-    localStorage.removeItem(KEYS.ACTIVE_TIMER);
+    workspaces.forEach((ws) => this.deleteWorkspaceKeys(ws.id));
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem(this.getUserScopedKey('workspaces'));
+      localStorage.removeItem(this.getUserScopedKey('active_workspace_id'));
+      localStorage.removeItem(this.getUserScopedKey('sessions'));
+      localStorage.removeItem(this.getUserScopedKey('questions'));
+      localStorage.removeItem(this.getUserScopedKey('active_timer'));
+      if (!this.getCurrentUserId() || this.getCurrentUserId() === 'usr-demo-student') {
+        localStorage.removeItem(KEYS.WORKSPACES);
+        localStorage.removeItem(KEYS.ACTIVE_WORKSPACE_ID);
+        localStorage.removeItem(KEYS.SESSIONS);
+        localStorage.removeItem(KEYS.QUESTIONS);
+        localStorage.removeItem(KEYS.ACTIVE_TIMER);
+      }
+    }
   }
 };

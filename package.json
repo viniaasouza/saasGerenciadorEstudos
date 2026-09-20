@@ -8,10 +8,11 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test": "node test-autopilot.mjs && node test-sm2.mjs && node test-backup.mjs",
-    "test:autopilot": "node test-autopilot.mjs && node test-sm2.mjs && node test-backup.mjs"
+    "test": "node test-autopilot.mjs && node test-sm2.mjs && node test-backup.mjs && node test-security-and-syllabus.mjs",
+    "test:autopilot": "node test-autopilot.mjs && node test-sm2.mjs && node test-backup.mjs && node test-security-and-syllabus.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.116.0",
     "lucide-react": "^1.24.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"

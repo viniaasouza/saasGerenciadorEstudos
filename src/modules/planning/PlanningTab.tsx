@@ -3,7 +3,8 @@ import { db } from '../../db/database';
 import { generateStudyCycle, parseVerticalSyllabus, reallocateIncompleteBlocks, DAYS_ORDER } from '../cycle/cycleGenerator';
 import type { Subject, StudyBlock, SubjectStatus, StudyCycleConfig } from '../../types';
 import { TCE_GO_SUBJECTS_PRESET, TCE_GO_CONCURSO_INFO } from '../../data/tceGoPreset';
-import { Plus, Trash2, RefreshCw, Upload, CheckCircle2, Circle, ChevronDown, ChevronUp, AlertTriangle, Calendar, Play, Settings, Zap, FileText } from 'lucide-react';
+import { AiSyllabusImportModal } from '../syllabus/AiSyllabusImportModal';
+import { Plus, Trash2, RefreshCw, Upload, CheckCircle2, Circle, ChevronDown, ChevronUp, AlertTriangle, Calendar, Play, Settings, Zap, FileText, Sparkles } from 'lucide-react';
 
 interface PlanningTabProps {
   onStartStudy: (subjectId: string, subjectName: string, blockId: string) => void;
@@ -29,6 +30,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({ onStartStudy, activeBl
   const [showImportArea, setShowImportArea] = useState(false);
   const [showAvailabilityPanel, setShowAvailabilityPanel] = useState(false);
   const [expandedSubjectId, setExpandedSubjectId] = useState<string | null>(null);
+  const [isAiImportOpen, setIsAiImportOpen] = useState(false);
 
   useEffect(() => {
     if (!activeWorkspaceId) return;
@@ -321,6 +323,20 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({ onStartStudy, activeBl
           </p>
         </div>
 
+        <div className="placeholder-card" style={{ minHeight: 'auto', padding: '1.5rem', justifyContent: 'center', background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(56, 189, 248, 0.08))', border: '1.5px solid rgba(16, 185, 129, 0.3)' }}>
+          <button 
+            onClick={() => setIsAiImportOpen(true)} 
+            className="mock-btn" 
+            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', width: '100%', justifyContent: 'center', fontWeight: 'bold' }}
+          >
+            <Sparkles size={18} />
+            Importar com IA (1 Clique)
+          </button>
+          <p className="card-notes" style={{ marginTop: '0.5rem', textAlign: 'center' }}>
+            Transforme qualquer edital em PDF com IA gratuita.
+          </p>
+        </div>
+
         <div className="placeholder-card card-highlight" style={{ minHeight: 'auto', padding: '1.5rem', justifyContent: 'center' }}>
           <button 
             onClick={() => setShowImportArea(!showImportArea)} 
@@ -328,7 +344,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({ onStartStudy, activeBl
             style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', width: '100%', justifyContent: 'center', fontWeight: 'bold' }}
           >
             <Upload size={18} />
-            {showImportArea ? 'Fechar Importação' : 'Importar Edital'}
+            {showImportArea ? 'Fechar Importação' : 'Importar Texto Manual'}
           </button>
           <p className="card-notes" style={{ marginTop: '0.5rem', textAlign: 'center' }}>
             Cole o edital verticalizado estruturado.
@@ -875,6 +891,16 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({ onStartStudy, activeBl
         </div>
 
       </div>
+
+      <AiSyllabusImportModal
+        isOpen={isAiImportOpen}
+        onClose={() => setIsAiImportOpen(false)}
+        onWorkspaceCreated={(wsId) => {
+          setSubjects(db.getSubjects(wsId));
+          const syncRes = db.syncCycleSchedule(wsId);
+          setCycleBlocks(syncRes.blocks);
+        }}
+      />
     </div>
   );
 };

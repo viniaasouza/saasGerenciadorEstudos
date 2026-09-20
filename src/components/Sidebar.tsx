@@ -1,17 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Sparkles, Calendar, Timer, Award, BarChart3, BookOpen, 
-  FileText, RotateCcw, Layers, ChevronLeft, ChevronRight 
+  FileText, RotateCcw, Layers, ChevronLeft, ChevronRight,
+  Shield, Globe, MessageSquare, User, LogIn, LogOut
 } from 'lucide-react';
 import type { ConcursoInfo } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   concursoInfo?: ConcursoInfo | null;
+  onOpenFeedback?: () => void;
+  onToggleLandingPage?: () => void;
+  onOpenAuth?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, concursoInfo }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ 
+  activeTab, 
+  setActiveTab, 
+  concursoInfo,
+  onOpenFeedback,
+  onToggleLandingPage,
+  onOpenAuth,
+}) => {
+  const { user, signOut } = useAuth();
+
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
     if (typeof window !== 'undefined' && window.innerWidth < 960) return true;
     const saved = localStorage.getItem('concurso_estudos_sidebar_collapsed');
@@ -49,6 +63,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, concu
     { id: 'flashcards', label: 'Flashcards', icon: Layers, description: 'Anki SM-2' },
     { id: 'questions', label: 'Questões', icon: Award, description: 'Desempenho' },
     { id: 'analytics', label: 'Desempenho', icon: BarChart3, description: 'Gráficos' },
+    { id: 'admin', label: 'Administrador', icon: Shield, description: 'Métricas & Bugs' },
   ];
 
   const examDate = concursoInfo?.dataProva || '2027-01-17';
@@ -116,7 +131,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, concu
         }}>
           <div>
             <div style={{ fontSize: '0.65rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px', opacity: 0.85 }}>
-              {concursoInfo?.banca ? concursoInfo.banca.split(' ')[0] : 'FCC'} • Prova
+              {concursoInfo?.banca ? concursoInfo.banca.split(' ')[0] : 'Prova'} • Alvo
             </div>
             <div style={{ fontSize: '0.8rem', fontWeight: 700, marginTop: '2px' }}>
               {new Date(examDate + 'T00:00:00').toLocaleDateString('pt-BR')}
@@ -146,7 +161,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, concu
             boxShadow: '0 4px 10px rgba(200, 16, 46, 0.25)',
             cursor: 'pointer'
           }}
-          title={`Prova ${concursoInfo?.concurso || 'TCE-GO'} (${concursoInfo?.banca || 'FCC'}): ${daysRemaining} dias restantes`}
+          title={`Prova ${concursoInfo?.concurso || 'Alvo'}: ${daysRemaining} dias restantes`}
         >
           <div style={{ fontSize: '1.15rem', fontWeight: 900, lineHeight: 1 }}>
             {daysRemaining > 0 ? daysRemaining : 0}
@@ -185,9 +200,137 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab, concu
         })}
       </nav>
 
+      {/* QUICK LINKS SECTION (Landing Page & Feedback) */}
       {!isCollapsed && (
-        <div className="sidebar-footer">
-          <p>Modo Local • {concursoInfo?.concurso || 'TCE-GO'}</p>
+        <div style={{ padding: '0.5rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+          {onToggleLandingPage && (
+            <button
+              onClick={onToggleLandingPage}
+              className="mock-btn text-muted"
+              style={{
+                width: '100%',
+                padding: '0.5rem 0.75rem',
+                fontSize: '0.8rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                justifyContent: 'flex-start',
+              }}
+              title="Acessar Landing Page"
+            >
+              <Globe size={14} />
+              <span>Ver Landing Page</span>
+            </button>
+          )}
+
+          {onOpenFeedback && (
+            <button
+              onClick={onOpenFeedback}
+              className="mock-btn text-muted"
+              style={{
+                width: '100%',
+                padding: '0.5rem 0.75rem',
+                fontSize: '0.8rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                justifyContent: 'flex-start',
+              }}
+              title="Enviar Feedback ou Relatar Bug"
+            >
+              <MessageSquare size={14} />
+              <span>Enviar Feedback</span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* USER ACCOUNT FOOTER */}
+      {!isCollapsed ? (
+        <div className="sidebar-footer" style={{ borderTop: '1px solid var(--border-color)', padding: '0.75rem 1rem' }}>
+          {user ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+              <div
+                onClick={onOpenAuth}
+                style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', overflow: 'hidden' }}
+                title="Clique para gerenciar conta"
+              >
+                <div
+                  style={{
+                    width: '30px',
+                    height: '30px',
+                    borderRadius: '50%',
+                    backgroundColor: user.role === 'admin' ? '#ef4444' : 'var(--color-accent)',
+                    color: '#ffffff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '0.8rem',
+                    fontWeight: 800,
+                    flexShrink: 0,
+                  }}
+                >
+                  {user.name.charAt(0).toUpperCase()}
+                </div>
+                <div style={{ overflow: 'hidden' }}>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 700, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                    {user.name}
+                  </div>
+                  <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                    {user.role === 'admin' ? 'Administrador' : 'Concurseiro'}
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => signOut()}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-muted)',
+                  cursor: 'pointer',
+                  padding: '4px',
+                }}
+                title="Sair da Conta"
+              >
+                <LogOut size={16} />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={onOpenAuth}
+              className="mock-btn"
+              style={{
+                width: '100%',
+                padding: '0.5rem',
+                fontSize: '0.8rem',
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+              }}
+            >
+              <LogIn size={14} />
+              <span>Entrar / Cadastrar</span>
+            </button>
+          )}
+        </div>
+      ) : (
+        <div style={{ padding: '0.75rem 0.25rem', textAlign: 'center', borderTop: '1px solid var(--border-color)' }}>
+          <button
+            onClick={onOpenAuth}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--text-muted)',
+              cursor: 'pointer',
+              padding: '6px',
+            }}
+            title={user ? `Logado como: ${user.name}` : 'Fazer Login'}
+          >
+            <User size={18} />
+          </button>
         </div>
       )}
 

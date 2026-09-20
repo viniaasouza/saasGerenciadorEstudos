@@ -17,6 +17,8 @@ import {
   getLocalDateString,
 } from './autopilotEngine';
 import { FlashcardReviewModal } from '../flashcards/FlashcardReviewModal';
+import { AiSyllabusImportModal } from '../syllabus/AiSyllabusImportModal';
+import { TCE_GO_SUBJECTS_PRESET, TCE_GO_CONCURSO_INFO } from '../../data/tceGoPreset';
 import {
   Sparkles,
   CheckCircle2,
@@ -81,6 +83,7 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
   // Settings modal
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [tempSettings, setTempSettings] = useState<AutopilotSettings>(settings);
+  const [isAiImportOpen, setIsAiImportOpen] = useState(false);
 
   // In-place questions logging state mapped by task.id
   const [questionInputs, setQuestionInputs] = useState<
@@ -467,8 +470,73 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
         </div>
       </div>
 
-      {/* CARD 1: REVISÕES RÁPIDAS DE HOJE */}
-      <section style={{ marginBottom: '2rem' }}>
+      {/* EMPTY ONBOARDING BANNER IF NO SUBJECTS */}
+      {subjects.length === 0 ? (
+        <div
+          className="card-primary"
+          style={{
+            padding: '2.5rem 2rem',
+            textAlign: 'center',
+            borderRadius: '16px',
+            marginBottom: '2rem',
+            border: '1px solid var(--border-color)',
+          }}
+        >
+          <div
+            style={{
+              width: '56px',
+              height: '56px',
+              borderRadius: '16px',
+              backgroundColor: 'rgba(16, 185, 129, 0.15)',
+              color: 'var(--color-accent)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              margin: '0 auto 1rem',
+            }}
+          >
+            <Sparkles size={28} />
+          </div>
+          <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-title)', marginBottom: '0.5rem' }}>
+            Configure Seu Primeiro Edital Para Ativar o Piloto Automático
+          </h2>
+          <p style={{ fontSize: '0.95rem', color: 'var(--text-muted)', maxWidth: '580px', margin: '0 auto 1.5rem', lineHeight: '1.6' }}>
+            O Piloto Automático precisa conhecer as disciplinas do seu edital para calcular sua missão diária personalizada. Você pode importar com IA em 1 minuto ou carregar nosso modelo pronto de demonstração.
+          </p>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => setIsAiImportOpen(true)}
+              className="mock-btn"
+              style={{
+                padding: '0.8rem 1.6rem',
+                fontWeight: 700,
+                fontSize: '0.95rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}
+            >
+              <Sparkles size={16} />
+              <span>Importar Edital com IA</span>
+            </button>
+            <button
+              onClick={() => {
+                db.saveSubjects(activeWorkspaceId, TCE_GO_SUBJECTS_PRESET);
+                db.saveConcursoInfo(activeWorkspaceId, TCE_GO_CONCURSO_INFO);
+                loadWorkspaceData();
+                if (onRefreshStats) onRefreshStats();
+              }}
+              className="mock-btn text-muted"
+              style={{ padding: '0.8rem 1.4rem', fontSize: '0.95rem' }}
+            >
+              Carregar Modelo Exemplo (TCE-GO TI)
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* CARD 1: REVISÕES RÁPIDAS DE HOJE */}
+          <section style={{ marginBottom: '2rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.9rem' }}>
           <div
             style={{
@@ -1270,6 +1338,8 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
           </div>
         </div>
       </section>
+        </>
+      )}
 
       {/* FLASHCARD REVIEW MODAL */}
       <FlashcardReviewModal
@@ -1465,6 +1535,16 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
           </div>
         </div>
       )}
+
+      {/* AI Syllabus Import Modal */}
+      <AiSyllabusImportModal
+        isOpen={isAiImportOpen}
+        onClose={() => setIsAiImportOpen(false)}
+        onWorkspaceCreated={() => {
+          loadWorkspaceData();
+          if (onRefreshStats) onRefreshStats();
+        }}
+      />
     </div>
   );
 };
