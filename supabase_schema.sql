@@ -35,7 +35,7 @@ create policy "Perfis visíveis pelo próprio usuário ou admin"
   using (
     auth.uid() = id or 
     public.is_admin() or
-    lower(coalesce(auth.jwt() ->> 'email', '')) = 'admin@estud.ai' or
+    lower(coalesce(auth.jwt() ->> 'email', '')) in ('admin@ixtude-ai.com.br', 'admin@estud.ai') or
     (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
   );
 
@@ -76,7 +76,7 @@ create policy "Leitura de feedbacks para admin ou criador"
   using (
     auth.uid() = user_id or 
     public.is_admin() or
-    lower(coalesce(auth.jwt() ->> 'email', '')) = 'admin@estud.ai' or
+    lower(coalesce(auth.jwt() ->> 'email', '')) in ('admin@ixtude-ai.com.br', 'admin@estud.ai') or
     (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
   );
 
@@ -85,7 +85,7 @@ create policy "Apenas administradores podem alterar status de feedbacks"
   on public.feedbacks for update
   using (
     public.is_admin() or
-    lower(coalesce(auth.jwt() ->> 'email', '')) = 'admin@estud.ai' or
+    lower(coalesce(auth.jwt() ->> 'email', '')) in ('admin@ixtude-ai.com.br', 'admin@estud.ai') or
     (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
   );
 
@@ -94,7 +94,7 @@ create policy "Apenas administradores podem excluir feedbacks"
   on public.feedbacks for delete
   using (
     public.is_admin() or
-    lower(coalesce(auth.jwt() ->> 'email', '')) = 'admin@estud.ai' or
+    lower(coalesce(auth.jwt() ->> 'email', '')) in ('admin@ixtude-ai.com.br', 'admin@estud.ai') or
     (auth.jwt() -> 'user_metadata' ->> 'role') = 'admin'
   );
 
@@ -123,10 +123,10 @@ create policy "Usuários gravam apenas seus próprios dados sincronizados"
 create or replace function public.handle_new_user()
 returns trigger as $$
 declare
-  admin_email text := 'admin@estud.ai';
+  admin_email text := 'admin@ixtude-ai.com.br';
   user_role text := 'user';
 begin
-  if lower(new.email) = admin_email or (new.raw_user_meta_data->>'role') = 'admin' then
+  if lower(new.email) in ('admin@ixtude-ai.com.br', 'admin@estud.ai') or (new.raw_user_meta_data->>'role') = 'admin' then
     user_role := 'admin';
   end if;
 

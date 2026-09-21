@@ -16,7 +16,7 @@ interface LandingPageProps {
 export const AI_SYLLABUS_PROMPT = `Você é um especialista em estruturação de editais para concursos públicos e alta performance de estudos.
 Vou fornecer a lista de disciplinas e o conteúdo programático bruto do meu edital.
 
-Sua tarefa é analisar o texto e transformá-lo em uma estrutura JSON válida e estrita, exatamente no formato exigido pelo estud.ai abaixo:
+Sua tarefa é analisar o texto e transformá-lo em uma estrutura JSON válida e estrita, exatamente no formato exigido pelo ixtude.ai abaixo:
 
 {
   "concursoInfo": {
@@ -97,7 +97,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <BookOpen size={20} />
           </div>
           <div>
-            <div style={{ fontSize: '1.25rem', fontWeight: 900, letterSpacing: '-0.5px' }}>estud.ai</div>
+            <div style={{ fontSize: '1.25rem', fontWeight: 900, letterSpacing: '-0.5px' }}>ixtude.ai</div>
             <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>Ciclo & Edital Inteligente</div>
           </div>
         </div>
@@ -607,7 +607,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         <div style={{ maxWidth: '1080px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <BookOpen size={18} color="var(--color-accent)" />
-            <strong style={{ color: 'var(--text-main)' }}>estud.ai</strong>
+            <strong style={{ color: 'var(--text-main)' }}>ixtude.ai</strong>
             <span>— Ciclo Inteligente, Edital Verticalizado & SM-2</span>
           </div>
 

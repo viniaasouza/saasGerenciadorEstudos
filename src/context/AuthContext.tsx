@@ -68,7 +68,7 @@ const KEYS = {
   FEEDBACKS: 'estud_ai_feedbacks',
 };
 
-const DEFAULT_ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || 'admin@estud.ai').toLowerCase().trim();
+const DEFAULT_ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || 'admin@ixtude-ai.com.br').toLowerCase().trim();
 
 // Seed initial mock users if none exist in localStorage
 const initializeMockUsers = (): AppUser[] => {
@@ -79,14 +79,14 @@ const initializeMockUsers = (): AppUser[] => {
     {
       id: 'usr-admin-default',
       email: DEFAULT_ADMIN_EMAIL,
-      name: 'Administrador estud.ai',
+      name: 'Administrador ixtude.ai',
       role: 'admin',
       createdAt: new Date().toISOString(),
       provider: 'local',
     },
     {
       id: 'usr-demo-student',
-      email: 'aluno@estud.ai',
+      email: 'aluno@ixtude-ai.com.br',
       name: 'Concurseiro Focado',
       role: 'user',
       createdAt: new Date().toISOString(),
@@ -108,7 +108,7 @@ const initializeFeedbacks = (): FeedbackItem[] => {
       id: 'fb-sample-1',
       userId: 'usr-demo-student',
       userName: 'Concurseiro Focado',
-      userEmail: 'aluno@estud.ai',
+      userEmail: 'aluno@ixtude-ai.com.br',
       type: 'sugestao',
       title: 'Adicionar filtro por Banca no Edital Verticalizado',
       description: 'Adorei a importação automática do edital com IA! Seria ótimo ter filtro rápido por banca Cebraspe/FCC nas questões.',
@@ -119,7 +119,7 @@ const initializeFeedbacks = (): FeedbackItem[] => {
       id: 'fb-sample-2',
       userId: 'usr-demo-student',
       userName: 'Concurseiro Focado',
-      userEmail: 'aluno@estud.ai',
+      userEmail: 'aluno@ixtude-ai.com.br',
       type: 'bug',
       title: 'Pequena inconsistência de cores no modo escuro',
       description: 'Em telas menores, o badge de dias restantes estava com contraste baixo no modo escuro.',

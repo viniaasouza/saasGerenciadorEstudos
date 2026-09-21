@@ -92,7 +92,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', overflow: 'hidden' }}>
               <BookOpen className="logo-icon" />
               <div className="logo-text">
-                <h1>estud.ai</h1>
+                <h1>ixtude.ai</h1>
                 <span>Ciclo Inteligente & Edital</span>
               </div>
             </div>

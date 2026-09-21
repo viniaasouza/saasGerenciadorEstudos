@@ -82,7 +82,7 @@ export const Header: React.FC<HeaderProps> = ({
       const link = document.createElement('a');
       const dateStr = new Date().toISOString().split('T')[0];
       link.href = url;
-      link.download = `backup-estud-ai-${dateStr}.json`;
+      link.download = `backup-ixtude-ai-${dateStr}.json`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);

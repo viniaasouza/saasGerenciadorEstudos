@@ -53,7 +53,7 @@ export const AdminTab: React.FC<AdminTabProps> = ({ onOpenAuthModal }) => {
           </h2>
 
           <p style={{ fontSize: '0.95rem', color: 'var(--text-muted)', lineHeight: '1.6', marginBottom: '2rem' }}>
-            Esta área é reservada para o proprietário do <strong>estud.ai</strong> para acompanhamento de métricas de cadastro, relatórios de bugs e saúde da infraestrutura.
+            Esta área é reservada para o proprietário do <strong>ixtude.ai</strong> para acompanhamento de métricas de cadastro, relatórios de bugs e saúde da infraestrutura.
           </p>
 
           <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap' }}>
