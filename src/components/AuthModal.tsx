@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { X, LogIn, UserPlus, Shield, Sparkles, Cloud, Database, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { X, LogIn, UserPlus, Sparkles, Cloud, Database, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -15,7 +15,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   initialMode = 'login',
   onSuccess,
 }) => {
-  const { signIn, signUp, loginAsDemo, loginAsAdminDemo, isDemoMode, user } = useAuth();
+  const { signIn, signUp, loginAsDemo, isDemoMode, user } = useAuth();
 
   const [mode, setMode] = useState<'login' | 'signup'>(initialMode);
   const [name, setName] = useState('');
@@ -71,14 +71,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const handleQuickDemo = async () => {
     setIsSubmitting(true);
     await loginAsDemo();
-    setIsSubmitting(false);
-    if (onSuccess) onSuccess();
-    onClose();
-  };
-
-  const handleQuickAdmin = async () => {
-    setIsSubmitting(true);
-    await loginAsAdminDemo();
     setIsSubmitting(false);
     if (onSuccess) onSuccess();
     onClose();
@@ -407,43 +399,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             Acesso Rápido de Teste (1 Clique)
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-            <button
-              type="button"
-              onClick={handleQuickDemo}
-              className="mock-btn text-muted"
-              style={{
-                fontSize: '0.8rem',
-                padding: '0.6rem 0.5rem',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '6px',
-              }}
-              title="Entrar como Concurseiro Aluno Demo"
-            >
-              <Sparkles size={14} color="#10b981" />
-              <span>Aluno Demo</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleQuickAdmin}
-              className="mock-btn text-muted"
-              style={{
-                fontSize: '0.8rem',
-                padding: '0.6rem 0.5rem',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '6px',
-              }}
-              title="Entrar com Painel de Administrador"
-            >
-              <Shield size={14} color="#ef4444" />
-              <span>Admin Demo</span>
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handleQuickDemo}
+            className="mock-btn text-muted"
+            style={{
+              width: '100%',
+              fontSize: '0.85rem',
+              padding: '0.65rem 0.75rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+            }}
+            title="Entrar como Concurseiro Aluno Demo"
+          >
+            <Sparkles size={14} color="#10b981" />
+            <span>Testar como Aluno Demo</span>
+          </button>
         </div>
       </div>
     </div>

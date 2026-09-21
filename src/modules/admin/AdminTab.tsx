@@ -20,8 +20,7 @@ export const AdminTab: React.FC<AdminTabProps> = ({ onOpenAuthModal }) => {
     updateFeedbackStatus, 
     deleteFeedback, 
     allUsers,
-    isDemoMode,
-    loginAsAdminDemo 
+    isDemoMode
   } = useAuth();
 
   const [filterType, setFilterType] = useState<string>('todos');
@@ -59,7 +58,7 @@ export const AdminTab: React.FC<AdminTabProps> = ({ onOpenAuthModal }) => {
 
           <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap' }}>
             <button
-              onClick={loginAsAdminDemo}
+              onClick={onOpenAuthModal}
               className="mock-btn"
               style={{
                 padding: '0.8rem 1.6rem',
@@ -69,16 +68,8 @@ export const AdminTab: React.FC<AdminTabProps> = ({ onOpenAuthModal }) => {
                 gap: '8px',
               }}
             >
-              <Shield size={16} />
-              <span>Entrar com Conta Admin Demo</span>
-            </button>
-
-            <button
-              onClick={onOpenAuthModal}
-              className="mock-btn text-muted"
-              style={{ padding: '0.8rem 1.4rem' }}
-            >
-              Login com Outro E-mail
+              <Lock size={16} />
+              <span>Fazer Login como Administrador</span>
             </button>
           </div>
         </div>

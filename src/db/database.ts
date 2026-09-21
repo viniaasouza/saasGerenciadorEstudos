@@ -2,16 +2,22 @@ import type { Subject, Subtopic, StudySession, QuestionSession, StudyBlock, Stud
 import { resolveGranTaxonomy } from '../data/tceGoPreset';
 import { DAYS_ORDER, getMondayOfWeek, getTodayDayName, reallocateIncompleteBlocks } from '../modules/cycle/cycleGenerator';
 
-// Version-tagged automatic storage wipe for port 5174 (estud_ai_clean_v3)
+// Version-tagged automatic storage wipe for port 5174 (estud_ai_clean_v4)
 // Purges any legacy keys in localStorage containing old TCE-GO data or un-scoped cycles
-const CLEANUP_KEY = 'estud_ai_clean_v3';
+const CLEANUP_KEY = 'estud_ai_clean_v4';
 if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
   try {
     if (!localStorage.getItem(CLEANUP_KEY)) {
       const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
-        if (k && (k.startsWith('concurso_estudos_') || k.startsWith('estud_ai_fc_'))) {
+        if (
+          k &&
+          (k.startsWith('concurso_estudos_') ||
+           k.startsWith('estud_ai_fc_') ||
+           k === 'estud_ai_auth_user' ||
+           k.startsWith('estud_ai_clean_'))
+        ) {
           keysToRemove.push(k);
         }
       }

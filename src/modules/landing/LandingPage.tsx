@@ -20,7 +20,7 @@ Sua tarefa é analisar o texto e transformá-lo em uma estrutura JSON válida e 
 
 {
   "concursoInfo": {
-    "concurso": "Nome do Concurso (ex: TCE-GO, Receita Federal, PF, etc.)",
+    "concurso": "Nome do Concurso (ex: Receita Federal, Caixa, PF, etc.)",
     "cargo": "Nome do Cargo (ex: Auditor, Analista de TI, etc.)",
     "banca": "Banca Organizadora (ex: FCC, Cebraspe, FGV, etc.)",
     "dataProva": "YYYY-MM-DD"

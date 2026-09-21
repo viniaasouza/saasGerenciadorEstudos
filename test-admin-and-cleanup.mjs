@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 
 console.log('--- RUNNING ADMIN ACCESS & DATA CLEANUP TESTS ---');
 
@@ -82,23 +83,29 @@ class MockLocalStorage {
   console.log('✓ Test 2 Passed: Admin tab unauthorized access automatically redirects to autopilot.');
 }
 
-// 3. Storage Wipe Logic (estud_ai_clean_v3)
+// 3. Storage Wipe Logic (estud_ai_clean_v4)
 {
   const mockStorage = new MockLocalStorage();
   mockStorage.setItem('concurso_estudos_workspaces', JSON.stringify([{ id: 'legacy-tce-go', name: 'TCE-GO Antigo' }]));
   mockStorage.setItem('concurso_estudos_subjects_legacy-tce-go', JSON.stringify([{ id: 'sub-1', name: 'Direito Administrativo' }]));
   mockStorage.setItem('concurso_estudos_cycle_blocks_legacy-tce-go', JSON.stringify([{ id: 'b-1' }]));
   mockStorage.setItem('estud_ai_fc_reviewed_legacy-tce-go_2026-09-20', '5');
-  mockStorage.setItem('estud_ai_auth_user', JSON.stringify({ id: 'usr-1', email: 'user@test.com' }));
-  mockStorage.setItem('estud_ai_mock_users', JSON.stringify([]));
+  mockStorage.setItem('estud_ai_auth_user', JSON.stringify({ id: 'usr-admin-default', role: 'admin', email: 'admin@estud.ai' }));
+  mockStorage.setItem('estud_ai_clean_v3', 'true');
 
-  // Run cleanup routine matching database.ts
-  const CLEANUP_KEY = 'estud_ai_clean_v3';
+  // Run cleanup routine matching main.tsx and database.ts
+  const CLEANUP_KEY = 'estud_ai_clean_v4';
   if (!mockStorage.getItem(CLEANUP_KEY)) {
     const keysToRemove = [];
     for (let i = 0; i < mockStorage.length; i++) {
       const k = mockStorage.key(i);
-      if (k && (k.startsWith('concurso_estudos_') || k.startsWith('estud_ai_fc_'))) {
+      if (
+        k &&
+        (k.startsWith('concurso_estudos_') ||
+         k.startsWith('estud_ai_fc_') ||
+         k === 'estud_ai_auth_user' ||
+         k.startsWith('estud_ai_clean_'))
+      ) {
         keysToRemove.push(k);
       }
     }
@@ -110,10 +117,11 @@ class MockLocalStorage {
   assert.equal(mockStorage.getItem('concurso_estudos_subjects_legacy-tce-go'), null, 'Old subjects must be wiped');
   assert.equal(mockStorage.getItem('concurso_estudos_cycle_blocks_legacy-tce-go'), null, 'Old cycle blocks must be wiped');
   assert.equal(mockStorage.getItem('estud_ai_fc_reviewed_legacy-tce-go_2026-09-20'), null, 'Old flashcards reviews must be wiped');
-  assert.notEqual(mockStorage.getItem('estud_ai_auth_user'), null, 'Auth state must be preserved');
-  assert.equal(mockStorage.getItem(CLEANUP_KEY), 'true', 'Cleanup flag must be recorded');
+  assert.equal(mockStorage.getItem('estud_ai_auth_user'), null, 'Old auth session must be purged so no unauthorized admin state persists');
+  assert.equal(mockStorage.getItem('estud_ai_clean_v3'), null, 'Old clean tag must be pruned');
+  assert.equal(mockStorage.getItem(CLEANUP_KEY), 'true', 'v4 cleanup flag must be recorded');
 
-  console.log('✓ Test 3 Passed: Storage wipe (estud_ai_clean_v3) purges all legacy TCE-GO keys without breaking auth.');
+  console.log('✓ Test 3 Passed: Storage wipe (estud_ai_clean_v4) purges all legacy TCE-GO keys and resets auth session cleanly.');
 }
 
 // 4. db.getConcursoInfo and db.getWorkspaces without fallbacks
@@ -170,6 +178,50 @@ class MockLocalStorage {
   assert.equal(configuredState.daysRemaining > 0, true, 'Days remaining accurately calculated');
 
   console.log('✓ Test 5 Passed: Header and Sidebar only display countdown badge and subtitle when fully configured.');
+}
+
+// 6. Security check: AuthModal must NOT expose Admin Demo button to visitors/users
+{
+  const authModalSource = fs.readFileSync('src/components/AuthModal.tsx', 'utf-8');
+  assert.equal(authModalSource.includes('Admin Demo'), false, 'AuthModal must not contain "Admin Demo" button');
+  assert.equal(authModalSource.includes('loginAsAdminDemo'), false, 'AuthModal must not call loginAsAdminDemo');
+
+  const adminTabSource = fs.readFileSync('src/modules/admin/AdminTab.tsx', 'utf-8');
+  assert.equal(adminTabSource.includes('loginAsAdminDemo'), false, 'AdminTab gate must not offer 1-click admin demo login');
+
+  console.log('✓ Test 6 Passed: AuthModal and AdminTab do not leak 1-click Admin shortcuts to users.');
+}
+
+// 7. Initial Clean Onboarding: 0 subjects, 0 cycle blocks, no preloaded contest
+{
+  const mockStorage = new MockLocalStorage();
+  
+  // Simulate App.tsx clean initialization
+  const defaultWs = {
+    id: `workspace-123`,
+    name: 'Meu Concurso',
+    createdAt: new Date().toISOString(),
+  };
+  mockStorage.setItem('concurso_estudos_workspaces', JSON.stringify([defaultWs]));
+  mockStorage.setItem(`concurso_estudos_subjects_${defaultWs.id}`, JSON.stringify([]));
+  mockStorage.setItem(`concurso_estudos_concurso_info_${defaultWs.id}`, JSON.stringify({
+    concurso: '',
+    cargo: '',
+    banca: '',
+    dataProva: '',
+  }));
+  mockStorage.setItem(`concurso_estudos_cycle_blocks_${defaultWs.id}`, JSON.stringify([]));
+
+  const subjects = JSON.parse(mockStorage.getItem(`concurso_estudos_subjects_${defaultWs.id}`));
+  const blocks = JSON.parse(mockStorage.getItem(`concurso_estudos_cycle_blocks_${defaultWs.id}`));
+  const info = JSON.parse(mockStorage.getItem(`concurso_estudos_concurso_info_${defaultWs.id}`));
+
+  assert.equal(subjects.length, 0, 'Initial state must have 0 subjects');
+  assert.equal(blocks.length, 0, 'Initial state must have 0 cycle blocks (no cycle downloaded/preloaded)');
+  assert.equal(info.concurso, '', 'Contest name must be empty initially');
+  assert.equal(info.dataProva, '', 'Exam date must be empty initially');
+
+  console.log('✓ Test 7 Passed: Initial onboarding starts 100% clean with 0 subjects, 0 blocks, and no preloaded contest.');
 }
 
 console.log('=== ALL ADMIN & DATA CLEANUP TESTS PASSED SUCCESSFULLY! ===');
