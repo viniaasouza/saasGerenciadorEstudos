@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../db/database';
-import { buildGranQuestoesUrl, TCE_GO_SUBJECTS_PRESET, TCE_GO_CONCURSO_INFO } from '../../data/tceGoPreset';
+import { buildGranQuestoesUrl } from '../../data/tceGoPreset';
 import type { Subject, Topic, Subtopic } from '../../types';
 import { AiSyllabusImportModal } from './AiSyllabusImportModal';
 import { 
@@ -603,7 +603,7 @@ export const SyllabusTab: React.FC<SyllabusTabProps> = ({ activeWorkspaceId, onS
               Nenhuma Disciplina Cadastrada Neste Ciclo
             </h3>
             <p style={{ fontSize: '0.95rem', color: 'var(--text-muted)', maxWidth: '560px', margin: '0 auto 1.75rem', lineHeight: '1.6' }}>
-              Importe seu edital verticalizado em 1 clique com nossa IA gratuita ou carregue um modelo de demonstração para testar as ferramentas.
+              Importe seu edital verticalizado em 1 clique com nossa IA gratuita para começar a estudar com métricas e cronograma inteligente.
             </p>
             <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap' }}>
               <button
@@ -620,17 +620,6 @@ export const SyllabusTab: React.FC<SyllabusTabProps> = ({ activeWorkspaceId, onS
               >
                 <Sparkles size={16} />
                 <span>Importar Edital com IA</span>
-              </button>
-              <button
-                onClick={() => {
-                  db.saveSubjects(activeWorkspaceId, TCE_GO_SUBJECTS_PRESET);
-                  db.saveConcursoInfo(activeWorkspaceId, TCE_GO_CONCURSO_INFO);
-                  setSubjects(TCE_GO_SUBJECTS_PRESET);
-                }}
-                className="mock-btn text-muted"
-                style={{ padding: '0.8rem 1.4rem', fontSize: '0.95rem' }}
-              >
-                Carregar Modelo Exemplo (TCE-GO TI)
               </button>
             </div>
           </div>

@@ -24,7 +24,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onToggleLandingPage,
   onOpenAuth,
 }) => {
-  const { user, signOut } = useAuth();
+  const { user, signOut, isAdmin } = useAuth();
 
   const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
     if (typeof window !== 'undefined' && window.innerWidth < 960) return true;
@@ -54,7 +54,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const menuItems = [
+  const baseMenuItems = [
     { id: 'autopilot', label: 'Piloto Automático', icon: Sparkles, description: 'Missão de Hoje' },
     { id: 'planning', label: 'Planejamento', icon: Calendar, description: 'Ciclo & Pesos' },
     { id: 'syllabus', label: 'Edital', icon: FileText, description: 'Verticalizado' },
@@ -63,14 +63,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'flashcards', label: 'Flashcards', icon: Layers, description: 'Anki SM-2' },
     { id: 'questions', label: 'Questões', icon: Award, description: 'Desempenho' },
     { id: 'analytics', label: 'Desempenho', icon: BarChart3, description: 'Gráficos' },
-    { id: 'admin', label: 'Administrador', icon: Shield, description: 'Métricas & Bugs' },
   ];
 
-  const examDate = concursoInfo?.dataProva || '2027-01-17';
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const exam = new Date(examDate + 'T00:00:00');
-  const daysRemaining = Math.ceil((exam.getTime() - now.getTime()) / 86400000);
+  const menuItems = (user && isAdmin)
+    ? [...baseMenuItems, { id: 'admin', label: 'Administrador', icon: Shield, description: 'Métricas & Bugs' }]
+    : baseMenuItems;
+
+  const hasExamDate = Boolean(concursoInfo?.concurso && concursoInfo?.dataProva);
+  let daysRemaining = 0;
+  if (hasExamDate && concursoInfo?.dataProva) {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const exam = new Date(concursoInfo.dataProva + 'T00:00:00');
+    daysRemaining = Math.ceil((exam.getTime() - now.getTime()) / 86400000);
+  }
 
   return (
     <aside className={`sidebar ${isCollapsed ? 'collapsed' : ''}`}>
@@ -117,7 +123,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* EXAM COUNTDOWN CARD */}
-      {!isCollapsed ? (
+      {hasExamDate && concursoInfo?.dataProva && (!isCollapsed ? (
         <div className="countdown-full" style={{
           margin: '0.75rem 1rem 0.25rem',
           background: 'linear-gradient(135deg, #c8102e, #8e0b1f)',
@@ -134,7 +140,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {concursoInfo?.banca ? concursoInfo.banca.split(' ')[0] : 'Prova'} • Alvo
             </div>
             <div style={{ fontSize: '0.8rem', fontWeight: 700, marginTop: '2px' }}>
-              {new Date(examDate + 'T00:00:00').toLocaleDateString('pt-BR')}
+              {new Date(concursoInfo.dataProva + 'T00:00:00').toLocaleDateString('pt-BR')}
             </div>
           </div>
           <div style={{ textAlign: 'right' }}>
@@ -170,7 +176,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             dias
           </div>
         </div>
-      )}
+      ))}
 
       <nav className="nav-menu" style={{ padding: isCollapsed ? '1rem 0.35rem' : '1.25rem 0.75rem' }}>
         {menuItems.map((item) => {

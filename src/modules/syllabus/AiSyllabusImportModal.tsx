@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
 import { db } from '../../db/database';
 import { generateStudyCycle } from '../cycle/cycleGenerator';
-import { TCE_GO_SUBJECTS_PRESET, TCE_GO_CONCURSO_INFO } from '../../data/tceGoPreset';
 import { AI_SYLLABUS_PROMPT } from '../landing/LandingPage';
 import { sanitizeString, extractAndParseJson } from '../../lib/security';
 import type { Subject, CicloWorkspace, ConcursoInfo, Topic, Subtopic } from '../../types';
 import { 
   X, Bot, Copy, Check, Upload, CheckCircle2, AlertCircle, 
-  Sparkles, RefreshCw 
+  Sparkles 
 } from 'lucide-react';
 
 interface AiSyllabusImportModalProps {
@@ -208,7 +207,7 @@ export const AiSyllabusImportModal: React.FC<AiSyllabusImportModalProps> = ({
         concurso: sanitizeString(concursoName),
         cargo: sanitizeString(cargoName),
         banca: sanitizeString(parsedData.concursoInfo?.banca?.trim() || 'A Definir'),
-        dataProva: parsedData.concursoInfo?.dataProva?.trim() || '2027-01-17',
+        dataProva: parsedData.concursoInfo?.dataProva?.trim() || '',
       };
       db.saveConcursoInfo(targetWsId, info);
 
@@ -223,32 +222,6 @@ export const AiSyllabusImportModal: React.FC<AiSyllabusImportModalProps> = ({
     } finally {
       setIsImporting(false);
     }
-  };
-
-  const handleLoadDemoModel = () => {
-    const timestamp = Date.now();
-    const existingWsList = db.getWorkspaces();
-    let wsId = `workspace-${timestamp}`;
-
-    if (existingWsList.length === 1 && db.getSubjects(existingWsList[0].id).length === 0) {
-      wsId = existingWsList[0].id;
-      db.saveWorkspaces([{ ...existingWsList[0], name: 'TCE-GO (Analista TI - Demo)' }]);
-    } else {
-      const newWs: CicloWorkspace = {
-        id: wsId,
-        name: 'TCE-GO (Analista TI - Demo)',
-        createdAt: new Date().toISOString(),
-      };
-      db.saveWorkspaces([...existingWsList, newWs]);
-    }
-
-    db.saveSubjects(wsId, TCE_GO_SUBJECTS_PRESET);
-    db.saveConcursoInfo(wsId, TCE_GO_CONCURSO_INFO);
-    const blocks = generateStudyCycle(TCE_GO_SUBJECTS_PRESET, 20, 90);
-    db.saveCycleBlocks(wsId, blocks);
-    db.setActiveWorkspaceId(wsId);
-    onWorkspaceCreated(wsId);
-    onClose();
   };
 
   const totalTopics = parsedData?.subjects?.reduce((acc: number, s: any) => {
@@ -475,48 +448,35 @@ export const AiSyllabusImportModal: React.FC<AiSyllabusImportModalProps> = ({
         </div>
 
         {/* Action Buttons */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '0.75rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>
           <button
             type="button"
-            onClick={handleLoadDemoModel}
+            onClick={onClose}
             className="mock-btn text-muted"
-            style={{ fontSize: '0.85rem', padding: '0.65rem 1rem', display: 'flex', alignItems: 'center', gap: '6px' }}
-            title="Carregar modelo de exemplo completo do concurso TCE-GO Analista de TI"
+            style={{ fontSize: '0.85rem', padding: '0.65rem 1.25rem' }}
           >
-            <RefreshCw size={14} />
-            <span>Carregar Modelo Exemplo (TCE-GO)</span>
+            Cancelar
           </button>
 
-          <div style={{ display: 'flex', gap: '0.75rem' }}>
-            <button
-              type="button"
-              onClick={onClose}
-              className="mock-btn text-muted"
-              style={{ fontSize: '0.85rem', padding: '0.65rem 1.25rem' }}
-            >
-              Cancelar
-            </button>
-
-            <button
-              type="button"
-              disabled={!parsedData || isImporting}
-              onClick={handleExecuteImport}
-              className="mock-btn"
-              style={{
-                fontSize: '0.9rem',
-                fontWeight: 700,
-                padding: '0.65rem 1.5rem',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                opacity: !parsedData || isImporting ? 0.6 : 1,
-                cursor: !parsedData || isImporting ? 'not-allowed' : 'pointer',
-              }}
-            >
-              <Sparkles size={16} />
-              <span>{isImporting ? 'Importando...' : 'Criar Ciclo & Importar Edital'}</span>
-            </button>
-          </div>
+          <button
+            type="button"
+            disabled={!parsedData || isImporting}
+            onClick={handleExecuteImport}
+            className="mock-btn"
+            style={{
+              fontSize: '0.9rem',
+              fontWeight: 700,
+              padding: '0.65rem 1.5rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              opacity: !parsedData || isImporting ? 0.6 : 1,
+              cursor: !parsedData || isImporting ? 'not-allowed' : 'pointer',
+            }}
+          >
+            <Sparkles size={16} />
+            <span>{isImporting ? 'Importando...' : 'Criar Ciclo & Importar Edital'}</span>
+          </button>
         </div>
       </div>
     </div>

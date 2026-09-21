@@ -617,7 +617,8 @@ console.log('--- RUNNING AUTOPILOT ENGINE TESTS ---');
 
 // TEST 4: getTodayMission orchestrates tasks, reviews, and tomorrow's preview
 {
-  const today = new Date();
+  // Use deterministic Wednesday so tomorrow is Thursday (avoids Sunday-to-Monday rollover edge-case in cycle day index)
+  const today = new Date('2026-09-23T12:00:00Z');
   const todayDay = getDayOfWeekName(today);
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -769,7 +770,8 @@ console.log('--- RUNNING AUTOPILOT ENGINE TESTS ---');
 
 // TEST 7: Subtopic completed today remains bound to today's task instead of vanishing
 {
-  const today = new Date();
+  // Use deterministic Wednesday so tomorrow is Thursday (avoids Sunday-to-Monday rollover edge-case in cycle day index)
+  const today = new Date('2026-09-23T12:00:00Z');
   const todayStr = getLocalDateString(today);
   const todayDay = getDayOfWeekName(today);
   const tomorrow = new Date(today);

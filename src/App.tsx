@@ -22,7 +22,7 @@ import type { CicloWorkspace, ConcursoInfo } from './types';
 import './index.css';
 
 function App() {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
 
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     const saved = localStorage.getItem('concurso_estudos_theme');
@@ -39,6 +39,13 @@ function App() {
   });
 
   const [activeTab, setActiveTab] = useState<string>('autopilot');
+
+  // Guard admin tab: redirect to autopilot if user is not admin
+  useEffect(() => {
+    if (activeTab === 'admin' && !isAdmin) {
+      setActiveTab('autopilot');
+    }
+  }, [activeTab, isAdmin]);
 
   // Modals states
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -102,10 +109,10 @@ function App() {
       // Clean onboarding: empty subjects so user starts fresh with clean data
       db.saveSubjects(defaultWs.id, []);
       db.saveConcursoInfo(defaultWs.id, {
-        concurso: 'Meu Concurso',
-        cargo: 'Cargo Alvo',
-        banca: 'A Definir',
-        dataProva: '2027-01-17',
+        concurso: '',
+        cargo: '',
+        banca: '',
+        dataProva: '',
       });
       db.saveCycleBlocks(defaultWs.id, []);
     }
@@ -261,10 +268,13 @@ function App() {
 
   // Load concursoInfo for active workspace
   useEffect(() => {
-    if (!activeWorkspaceId) return;
+    if (!activeWorkspaceId) {
+      setConcursoInfo(null);
+      return;
+    }
     const info = db.getConcursoInfo(activeWorkspaceId);
     setConcursoInfo(info);
-  }, [activeWorkspaceId]);
+  }, [activeWorkspaceId, refreshStatsTrigger]);
 
   // If user opens Landing Page view
   if (showLandingPage) {
@@ -368,6 +378,9 @@ function App() {
       case 'analytics':
         return <AnalyticsTab key={activeWorkspaceId} activeWorkspaceId={activeWorkspaceId} />;
       case 'admin':
+        if (!isAdmin) {
+          return null;
+        }
         return (
           <AdminTab
             key={activeWorkspaceId}

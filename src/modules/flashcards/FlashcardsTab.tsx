@@ -246,87 +246,6 @@ export const FlashcardsTab: React.FC<FlashcardsTabProps> = ({ activeWorkspaceId 
     setIsCreateModalOpen(true);
   };
 
-  // Generate Demo Cards for TCE-GO properly mapped to canonical subjects
-  const handleGenerateDemoCards = () => {
-    const admSub = subjects.find((s) => s.name.toLowerCase().includes('administrativo')) || subjects[0] || { id: 'dir-adm', name: 'Direito Administrativo' };
-    const extSub = subjects.find((s) => s.name.toLowerCase().includes('controle') || s.name.toLowerCase().includes('constitucional')) || admSub;
-    const tiSub = subjects.find((s) => s.name.toLowerCase().includes('software') || s.name.toLowerCase().includes('banco') || s.name.toLowerCase().includes('dados')) || admSub;
-    const nowStr = todayStr;
-
-    const demoCards: Flashcard[] = [
-      {
-        id: `demo-1-${Date.now()}`,
-        workspaceId: activeWorkspaceId,
-        subjectId: admSub.id,
-        subjectName: admSub.name,
-        topicName: 'Atos Administrativos',
-        front: 'Quais são os 5 requisitos de validade do ato administrativo (**COMFIFORM**)?',
-        back: '**C**ompetência, **F**inalidade, **F**orma, **M**otivo e **O**bjeto.',
-        tags: ['requisitos', 'atos', 'fcc'],
-        createdAt: nowStr,
-        dueDate: nowStr,
-        interval: 0,
-        repetition: 0,
-        easeFactor: 2.5,
-        state: 'new',
-      },
-      {
-        id: `demo-2-${Date.now()}`,
-        workspaceId: activeWorkspaceId,
-        subjectId: admSub.id,
-        subjectName: admSub.name,
-        topicName: 'Atos Administrativos',
-        front: 'Qual a diferença crucial entre **anulação** e **revogação** do ato administrativo?',
-        back: '- **Anulação**: incide sobre atos *ilegais/inválidos*, com efeitos *ex tunc* (retroativos). Pode ser feita pela Administração ou Judiciário.\n- **Revogação**: incide sobre atos *válidos*, por conveniência e oportunidade, com efeitos *ex nunc* (não retroage). Exclusiva da Administração.',
-        tags: ['anulação', 'revogação', 'jurisprudencia'],
-        createdAt: nowStr,
-        dueDate: nowStr,
-        interval: 0,
-        repetition: 0,
-        easeFactor: 2.5,
-        state: 'new',
-      },
-      {
-        id: `demo-3-${Date.now()}`,
-        workspaceId: activeWorkspaceId,
-        subjectId: extSub.id,
-        subjectName: extSub.name,
-        topicName: 'Controle Externo / Tribunais de Contas',
-        front: 'A decisão do Tribunal de Contas que imputa débito ou multa tem eficácia de {{c1::título executivo extrajudicial}}?',
-        back: 'Sim! Conforme art. 71, § 3º da CF/88: *as decisões do Tribunal de que resulte imputação de débito ou multa terão eficácia de **título executivo**.* A execução compete ao ente público credor.',
-        tags: ['cf88', 'tce-go', 'cloze'],
-        createdAt: nowStr,
-        dueDate: nowStr,
-        interval: 0,
-        repetition: 0,
-        easeFactor: 2.5,
-        state: 'new',
-      },
-      {
-        id: `demo-4-${Date.now()}`,
-        workspaceId: activeWorkspaceId,
-        subjectId: tiSub.id,
-        subjectName: tiSub.name,
-        topicName: 'Engenharia de Software / Banco de Dados',
-        front: 'O que preconiza o teorema **CAP** em bancos de dados distribuídos?',
-        back: 'Em qualquer sistema distribuído, é impossível garantir simultaneamente as 3 propriedades:\n1. **C**onsistência (Consistency)\n2. **A**valiação/Disponibilidade (Availability)\n3. **P**artição Tolerante (Partition Tolerance)',
-        tags: ['ti', 'teorema-cap'],
-        createdAt: nowStr,
-        dueDate: nowStr,
-        interval: 0,
-        repetition: 0,
-        easeFactor: 2.5,
-        state: 'new',
-      },
-    ];
-
-    setCards((prev) => {
-      const updated = [...demoCards, ...prev];
-      db.saveFlashcards(activeWorkspaceId, updated);
-      return updated;
-    });
-  };
-
   const getStateBadge = (state: FlashcardState) => {
     switch (state) {
       case 'new':
@@ -921,14 +840,6 @@ export const FlashcardsTab: React.FC<FlashcardsTabProps> = ({ activeWorkspaceId 
               style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.5rem', fontWeight: 700 }}
             >
               <Plus size={18} /> Criar Primeiro Flashcard
-            </button>
-            <button
-              type="button"
-              onClick={handleGenerateDemoCards}
-              className="mock-btn text-muted"
-              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.75rem 1.25rem' }}
-            >
-              <Sparkles size={16} /> Gerar Cards de Demonstração (TCE-GO)
             </button>
           </div>
         </div>

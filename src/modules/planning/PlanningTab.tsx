@@ -2,9 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../../db/database';
 import { generateStudyCycle, parseVerticalSyllabus, reallocateIncompleteBlocks, DAYS_ORDER } from '../cycle/cycleGenerator';
 import type { Subject, StudyBlock, SubjectStatus, StudyCycleConfig } from '../../types';
-import { TCE_GO_SUBJECTS_PRESET, TCE_GO_CONCURSO_INFO } from '../../data/tceGoPreset';
 import { AiSyllabusImportModal } from '../syllabus/AiSyllabusImportModal';
-import { Plus, Trash2, RefreshCw, Upload, CheckCircle2, Circle, ChevronDown, ChevronUp, AlertTriangle, Calendar, Play, Settings, Zap, FileText, Sparkles } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, Upload, CheckCircle2, Circle, ChevronDown, ChevronUp, AlertTriangle, Calendar, Play, Settings, FileText, Sparkles } from 'lucide-react';
 
 interface PlanningTabProps {
   onStartStudy: (subjectId: string, subjectName: string, blockId: string) => void;
@@ -58,23 +57,6 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({ onStartStudy, activeBl
   const handleSaveBlocks = (updatedBlocks: StudyBlock[]) => {
     setCycleBlocks(updatedBlocks);
     db.saveCycleBlocks(activeWorkspaceId, updatedBlocks);
-  };
-
-  // Load official TCE-GO IT syllabus preset
-  const handleLoadTceGoPreset = () => {
-    if (subjects.length > 0 && !window.confirm('Deseja carregar o Edital Completo TCE-GO (TI)? As matérias atuais deste workspace serão substituídas.')) {
-      return;
-    }
-    handleSaveSubjects(TCE_GO_SUBJECTS_PRESET);
-    db.saveConcursoInfo(activeWorkspaceId, TCE_GO_CONCURSO_INFO);
-    const blocks = generateStudyCycle(
-      TCE_GO_SUBJECTS_PRESET,
-      cycleConfig.weeklyHours,
-      90,
-      cycleConfig.dailyHours
-    );
-    handleSaveBlocks(blocks);
-    alert('Edital Oficial TCE-GO (TI) carregado com sucesso! 14 disciplinas e cronograma semanal atualizados.');
   };
 
   // Import Gran Questoes JSON backup
@@ -351,52 +333,36 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({ onStartStudy, activeBl
           </p>
         </div>
 
-        {/* PRESET TCE-GO & GRAN BACKUP CARD */}
+        {/* GRAN BACKUP CARD */}
         <div className="placeholder-card" style={{
           minHeight: 'auto',
           padding: '1.5rem',
           justifyContent: 'center',
-          background: 'linear-gradient(135deg, rgba(200, 16, 46, 0.08), rgba(13, 19, 76, 0.08))',
-          border: '1.5px solid rgba(200, 16, 46, 0.25)'
+          background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(13, 19, 76, 0.08))',
+          border: '1.5px solid rgba(59, 130, 246, 0.25)'
         }}>
-          <button
-            onClick={handleLoadTceGoPreset}
-            className="mock-btn"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              width: '100%',
-              justifyContent: 'center',
-              fontWeight: 'bold',
-              background: '#c8102e',
-              color: '#ffffff'
-            }}
-          >
-            <Zap size={18} />
-            Carregar Edital TCE-GO (TI)
-          </button>
-          <div style={{ display: 'flex', gap: '8px', marginTop: '0.5rem' }}>
-            <label style={{
-              flex: 1,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '4px',
-              padding: '6px',
-              background: 'var(--card-bg, #ffffff)',
-              border: '1px solid var(--border-color)',
-              borderRadius: '6px',
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              textAlign: 'center'
-            }}>
-              <FileText size={13} />
-              <span>Importar JSON Gran</span>
-              <input type="file" accept=".json" onChange={handleImportGranJson} style={{ display: 'none' }} />
-            </label>
-          </div>
+          <label style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            padding: '10px 14px',
+            background: 'var(--card-bg, #ffffff)',
+            border: '1px solid var(--border-color)',
+            borderRadius: '8px',
+            fontSize: '0.85rem',
+            fontWeight: 700,
+            cursor: 'pointer',
+            textAlign: 'center',
+            color: 'var(--text-main)'
+          }}>
+            <FileText size={16} />
+            <span>Importar JSON Gran</span>
+            <input type="file" accept=".json" onChange={handleImportGranJson} style={{ display: 'none' }} />
+          </label>
+          <p className="card-notes" style={{ marginTop: '0.5rem', textAlign: 'center' }}>
+            Sincronize tópicos e resoluções do Gran Questões.
+          </p>
         </div>
       </div>
 

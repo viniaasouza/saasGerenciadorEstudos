@@ -2,6 +2,25 @@ import type { Subject, Subtopic, StudySession, QuestionSession, StudyBlock, Stud
 import { resolveGranTaxonomy } from '../data/tceGoPreset';
 import { DAYS_ORDER, getMondayOfWeek, getTodayDayName, reallocateIncompleteBlocks } from '../modules/cycle/cycleGenerator';
 
+// Version-tagged automatic storage wipe for port 5174 (estud_ai_clean_v3)
+// Purges any legacy keys in localStorage containing old TCE-GO data or un-scoped cycles
+const CLEANUP_KEY = 'estud_ai_clean_v3';
+if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+  try {
+    if (!localStorage.getItem(CLEANUP_KEY)) {
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && (k.startsWith('concurso_estudos_') || k.startsWith('estud_ai_fc_'))) {
+          keysToRemove.push(k);
+        }
+      }
+      keysToRemove.forEach((k) => localStorage.removeItem(k));
+      localStorage.setItem(CLEANUP_KEY, 'true');
+    }
+  } catch {}
+}
+
 const KEYS = {
   WORKSPACES: 'concurso_estudos_workspaces',
   ACTIVE_WORKSPACE_ID: 'concurso_estudos_active_workspace_id',
@@ -53,15 +72,7 @@ export const db = {
   // WORKSPACE METADATA HELPERS
   getWorkspaces(): CicloWorkspace[] {
     const key = this.getUserScopedKey('workspaces');
-    let data = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
-    // Backwards compatibility migration for demo/initial user
-    if (!data && typeof localStorage !== 'undefined' && (!this.getCurrentUserId() || this.getCurrentUserId() === 'usr-demo-student')) {
-      const legacy = localStorage.getItem(KEYS.WORKSPACES);
-      if (legacy) {
-        data = legacy;
-        localStorage.setItem(key, legacy);
-      }
-    }
+    const data = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
     return data ? JSON.parse(data) : [];
   },
 
@@ -74,12 +85,7 @@ export const db = {
 
   getActiveWorkspaceId(): string | null {
     const key = this.getUserScopedKey('active_workspace_id');
-    let id = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
-    if (!id && typeof localStorage !== 'undefined' && (!this.getCurrentUserId() || this.getCurrentUserId() === 'usr-demo-student')) {
-      id = localStorage.getItem(KEYS.ACTIVE_WORKSPACE_ID);
-      if (id) localStorage.setItem(key, id);
-    }
-    return id;
+    return typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
   },
 
   setActiveWorkspaceId(id: string): void {
@@ -371,11 +377,7 @@ export const db = {
   // GLOBAL DATA HELPERS WITH WORKSPACE TAGS & USER SCOPING
   getSessions(): StudySession[] {
     const key = this.getUserScopedKey('sessions');
-    let data = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
-    if (!data && typeof localStorage !== 'undefined' && (!this.getCurrentUserId() || this.getCurrentUserId() === 'usr-demo-student')) {
-      data = localStorage.getItem(KEYS.SESSIONS);
-      if (data) localStorage.setItem(key, data);
-    }
+    const data = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
     return data ? JSON.parse(data) : [];
   },
 
@@ -388,11 +390,7 @@ export const db = {
 
   getQuestions(): QuestionSession[] {
     const key = this.getUserScopedKey('questions');
-    let data = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
-    if (!data && typeof localStorage !== 'undefined' && (!this.getCurrentUserId() || this.getCurrentUserId() === 'usr-demo-student')) {
-      data = localStorage.getItem(KEYS.QUESTIONS);
-      if (data) localStorage.setItem(key, data);
-    }
+    const data = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
     return data ? JSON.parse(data) : [];
   },
 
@@ -408,12 +406,7 @@ export const db = {
     if (!workspaceId) return null;
     const data = localStorage.getItem(KEYS.CONCURSO_INFO(workspaceId));
     if (data) return JSON.parse(data);
-    return {
-      concurso: 'Meu Concurso',
-      cargo: 'Cargo Alvo',
-      banca: 'A Definir',
-      dataProva: '2027-01-17'
-    };
+    return null;
   },
 
   saveConcursoInfo(workspaceId: string, info: ConcursoInfo): void {

@@ -18,7 +18,6 @@ import {
 } from './autopilotEngine';
 import { FlashcardReviewModal } from '../flashcards/FlashcardReviewModal';
 import { AiSyllabusImportModal } from '../syllabus/AiSyllabusImportModal';
-import { TCE_GO_SUBJECTS_PRESET, TCE_GO_CONCURSO_INFO } from '../../data/tceGoPreset';
 import {
   Sparkles,
   CheckCircle2,
@@ -501,7 +500,7 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
             Configure Seu Primeiro Edital Para Ativar o Piloto Automático
           </h2>
           <p style={{ fontSize: '0.95rem', color: 'var(--text-muted)', maxWidth: '580px', margin: '0 auto 1.5rem', lineHeight: '1.6' }}>
-            O Piloto Automático precisa conhecer as disciplinas do seu edital para calcular sua missão diária personalizada. Você pode importar com IA em 1 minuto ou carregar nosso modelo pronto de demonstração.
+            O Piloto Automático precisa conhecer as disciplinas do seu edital para calcular sua missão diária personalizada. Importe seu edital com IA em 1 minuto para começar.
           </p>
           <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap' }}>
             <button
@@ -518,18 +517,6 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
             >
               <Sparkles size={16} />
               <span>Importar Edital com IA</span>
-            </button>
-            <button
-              onClick={() => {
-                db.saveSubjects(activeWorkspaceId, TCE_GO_SUBJECTS_PRESET);
-                db.saveConcursoInfo(activeWorkspaceId, TCE_GO_CONCURSO_INFO);
-                loadWorkspaceData();
-                if (onRefreshStats) onRefreshStats();
-              }}
-              className="mock-btn text-muted"
-              style={{ padding: '0.8rem 1.4rem', fontSize: '0.95rem' }}
-            >
-              Carregar Modelo Exemplo (TCE-GO TI)
             </button>
           </div>
         </div>

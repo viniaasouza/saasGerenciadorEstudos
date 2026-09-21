@@ -65,11 +65,14 @@ export const Header: React.FC<HeaderProps> = ({
     return `${pad(hrs)}:${pad(mins)}:${pad(secs)}`;
   };
 
-  const examDate = concursoInfo?.dataProva || '2027-01-17';
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const exam = new Date(examDate + 'T00:00:00');
-  const daysRemaining = Math.ceil((exam.getTime() - now.getTime()) / 86400000);
+  const hasConfiguredExam = Boolean(concursoInfo?.concurso && concursoInfo?.dataProva);
+  let daysRemaining = 0;
+  if (hasConfiguredExam && concursoInfo?.dataProva) {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const exam = new Date(concursoInfo.dataProva + 'T00:00:00');
+    daysRemaining = Math.ceil((exam.getTime() - now.getTime()) / 86400000);
+  }
 
   const handleExportBackup = () => {
     try {
@@ -126,9 +129,11 @@ export const Header: React.FC<HeaderProps> = ({
     <header className="app-header">
       <div className="header-greeting">
         <h2>{displayName ? `Bons estudos, ${displayName}!` : 'Bons estudos!'}</h2>
-        <p className="header-subtitle">
-          Foco e persistência rumo à aprovação no {concursoInfo?.concurso || 'Seu Concurso'} • {concursoInfo?.banca || 'Banca Alvo'}.
-        </p>
+        {hasConfiguredExam && concursoInfo && (
+          <p className="header-subtitle">
+            Foco e persistência rumo à aprovação no {concursoInfo.concurso} {concursoInfo.banca ? `• ${concursoInfo.banca}` : ''}.
+          </p>
+        )}
       </div>
 
       <div className="header-actions">
@@ -212,15 +217,17 @@ export const Header: React.FC<HeaderProps> = ({
         )}
 
         {/* Countdown Badge */}
-        <div className="cycle-badge header-countdown-badge" style={{ borderLeft: '3px solid #c8102e' }}>
-          <Calendar className="badge-icon" style={{ color: '#c8102e' }} />
-          <div className="badge-content">
-            <span className="badge-title">Prova {concursoInfo?.concurso || 'Alvo'}</span>
-            <span className="badge-value" style={{ color: '#c8102e' }}>
-              {daysRemaining > 0 ? `${daysRemaining} dias` : 'Hoje!'}
-            </span>
+        {hasConfiguredExam && concursoInfo && (
+          <div className="cycle-badge header-countdown-badge" style={{ borderLeft: '3px solid #c8102e' }}>
+            <Calendar className="badge-icon" style={{ color: '#c8102e' }} />
+            <div className="badge-content">
+              <span className="badge-title">Prova {concursoInfo.concurso}</span>
+              <span className="badge-value" style={{ color: '#c8102e' }}>
+                {daysRemaining > 0 ? `${daysRemaining} dias` : 'Hoje!'}
+              </span>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="cycle-badge">
           <Clock className="badge-icon" />
