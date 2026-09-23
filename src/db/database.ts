@@ -1,6 +1,7 @@
-import type { Subject, Subtopic, StudySession, QuestionSession, StudyBlock, StudyCycleConfig, CicloWorkspace, ConcursoInfo, SpacedReview, RunningTimerState, Flashcard, AutopilotSettings } from '../types';
+import type { Subject, Subtopic, StudySession, QuestionSession, StudyBlock, StudyCycleConfig, CicloWorkspace, ConcursoInfo, SpacedReview, RunningTimerState, Flashcard, AutopilotSettings, GamificationProfile, GamificationActionType } from '../types';
 import { resolveGranTaxonomy } from '../data/tceGoPreset';
 import { DAYS_ORDER, getMondayOfWeek, getTodayDayName, reallocateIncompleteBlocks } from '../modules/cycle/cycleGenerator';
+import { awardXp, calculateStreakFromDates } from '../modules/autopilot/gamification';
 
 // Version-tagged automatic storage wipe for port 5174 (estud_ai_clean_v4)
 // Purges any legacy keys in localStorage containing old TCE-GO data or un-scoped cycles
@@ -42,6 +43,7 @@ const KEYS = {
   REVISOES: (wsId: string) => `concurso_estudos_revisoes_${wsId}`,
   FLASHCARDS: (wsId: string) => `concurso_estudos_flashcards_${wsId}`,
   AUTOPILOT_SETTINGS: (wsId: string) => `concurso_estudos_autopilot_settings_${wsId}`,
+  GAMIFICATION: 'concurso_estudos_gamification_profile',
 };
 
 let currentUserId: string | null = null;
@@ -1017,6 +1019,92 @@ export const db = {
     localStorage.removeItem(KEYS.AUTOPILOT_SETTINGS(workspaceId));
   },
 
+  getGamificationProfile(): GamificationProfile {
+    const key = this.getUserScopedKey('gamification_profile');
+    if (typeof localStorage !== 'undefined') {
+      try {
+        const saved = localStorage.getItem(key);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && typeof parsed.totalXp === 'number') {
+            return parsed;
+          }
+        }
+      } catch {}
+    }
+
+    // Default initialization based on existing study activity
+    const todayStr = new Date().toISOString().split('T')[0];
+    const sessions = this.getSessions();
+    const questions = this.getQuestions();
+
+    const activeDates = Array.from(
+      new Set([
+        ...sessions.map((s) => s.date.split('T')[0]),
+        ...questions.map((q) => q.date.split('T')[0]),
+      ])
+    );
+
+    const calculatedStreak = calculateStreakFromDates(activeDates, todayStr);
+
+    let initialXp = 0;
+    const initialDailyXp: Record<string, number> = {};
+
+    questions.forEach((q) => {
+      const qDate = q.date.split('T')[0];
+      const xp = (q.attempted || 0) * 5 + (q.correct || 0) * 5;
+      initialXp += xp;
+      initialDailyXp[qDate] = (initialDailyXp[qDate] || 0) + xp;
+    });
+
+    sessions.forEach((s) => {
+      const sDate = s.date.split('T')[0];
+      const xp = s.studyType === 'teoria' ? 50 : 30;
+      initialXp += xp;
+      initialDailyXp[sDate] = (initialDailyXp[sDate] || 0) + xp;
+    });
+
+    const defaultProfile: GamificationProfile = {
+      totalXp: initialXp,
+      dailyXp: initialDailyXp,
+      currentStreak: calculatedStreak,
+      longestStreak: Math.max(calculatedStreak, activeDates.length > 0 ? 1 : 0),
+      lastActiveDate: activeDates.includes(todayStr) ? todayStr : activeDates[0] || undefined,
+      history: [],
+    };
+
+    return defaultProfile;
+  },
+
+  saveGamificationProfile(profile: GamificationProfile): void {
+    const key = this.getUserScopedKey('gamification_profile');
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(key, JSON.stringify(profile));
+    }
+  },
+
+  awardXpAction(
+    actionType: GamificationActionType,
+    xpAwarded: number,
+    description: string,
+    workspaceId?: string
+  ): { profile: GamificationProfile; levelUp: boolean; oldLevel: number; newLevel: number } {
+    const currentProfile = this.getGamificationProfile();
+    const todayStr = new Date().toISOString().split('T')[0];
+    const { updatedProfile, levelUp, oldLevel, newLevel } = awardXp(
+      currentProfile,
+      {
+        type: actionType,
+        xpAwarded,
+        description,
+        workspaceId,
+      },
+      todayStr
+    );
+    this.saveGamificationProfile(updatedProfile);
+    return { profile: updatedProfile, levelUp, oldLevel, newLevel };
+  },
+
   clearAll(): void {
     const workspaces = this.getWorkspaces();
     workspaces.forEach((ws) => this.deleteWorkspaceKeys(ws.id));
@@ -1026,12 +1114,14 @@ export const db = {
       localStorage.removeItem(this.getUserScopedKey('sessions'));
       localStorage.removeItem(this.getUserScopedKey('questions'));
       localStorage.removeItem(this.getUserScopedKey('active_timer'));
+      localStorage.removeItem(this.getUserScopedKey('gamification_profile'));
       if (!this.getCurrentUserId() || this.getCurrentUserId() === 'usr-demo-student') {
         localStorage.removeItem(KEYS.WORKSPACES);
         localStorage.removeItem(KEYS.ACTIVE_WORKSPACE_ID);
         localStorage.removeItem(KEYS.SESSIONS);
         localStorage.removeItem(KEYS.QUESTIONS);
         localStorage.removeItem(KEYS.ACTIVE_TIMER);
+        localStorage.removeItem(KEYS.GAMIFICATION);
       }
     }
   }

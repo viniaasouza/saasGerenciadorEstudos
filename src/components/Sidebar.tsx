@@ -14,6 +14,7 @@ interface SidebarProps {
   onOpenFeedback?: () => void;
   onToggleLandingPage?: () => void;
   onOpenAuth?: () => void;
+  onOpenTerms?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ 
@@ -23,6 +24,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onOpenFeedback,
   onToggleLandingPage,
   onOpenAuth,
+  onOpenTerms,
 }) => {
   const { user, signOut, isAdmin } = useAuth();
 
@@ -246,6 +248,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
               <MessageSquare size={14} />
               <span>Enviar Feedback</span>
+            </button>
+          )}
+
+          {onOpenTerms && (
+            <button
+              onClick={onOpenTerms}
+              className="mock-btn text-muted"
+              style={{
+                width: '100%',
+                padding: '0.5rem 0.75rem',
+                fontSize: '0.8rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                justifyContent: 'flex-start',
+              }}
+              title="Termos de Uso e Política de Privacidade (LGPD)"
+            >
+              <Shield size={14} />
+              <span>Privacidade & LGPD</span>
             </button>
           )}
         </div>

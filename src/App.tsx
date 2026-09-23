@@ -15,6 +15,9 @@ import { LandingPage } from './modules/landing/LandingPage';
 import { AuthModal } from './components/AuthModal';
 import { FeedbackModal } from './components/FeedbackModal';
 import { AiSyllabusImportModal } from './modules/syllabus/AiSyllabusImportModal';
+import { FooterAdBanner } from './components/FooterAdBanner';
+import { TermsPrivacyModal } from './components/TermsPrivacyModal';
+import { CookieConsentBanner } from './components/CookieConsentBanner';
 import { useAuth } from './context/AuthContext';
 import { db } from './db/database';
 import { promoteSubjectAndReallocate, generateStudyCycle } from './modules/cycle/cycleGenerator';
@@ -52,6 +55,7 @@ function App() {
   const [authModalMode, setAuthModalMode] = useState<'login' | 'signup'>('login');
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [isAiImportOpen, setIsAiImportOpen] = useState(false);
+  const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
 
   // Multi-Workspace States
   const [workspaces, setWorkspaces] = useState<CicloWorkspace[]>([]);
@@ -287,6 +291,7 @@ function App() {
             setIsAuthModalOpen(true);
           }}
           onOpenFeedback={() => setIsFeedbackModalOpen(true)}
+          onOpenTerms={() => setIsTermsModalOpen(true)}
           theme={theme}
           toggleTheme={toggleTheme}
         />
@@ -301,6 +306,15 @@ function App() {
         <FeedbackModal
           isOpen={isFeedbackModalOpen}
           onClose={() => setIsFeedbackModalOpen(false)}
+        />
+
+        <TermsPrivacyModal
+          isOpen={isTermsModalOpen}
+          onClose={() => setIsTermsModalOpen(false)}
+        />
+
+        <CookieConsentBanner
+          onOpenTerms={() => setIsTermsModalOpen(true)}
         />
       </div>
     );
@@ -414,6 +428,7 @@ function App() {
           setAuthModalMode('login');
           setIsAuthModalOpen(true);
         }}
+        onOpenTerms={() => setIsTermsModalOpen(true)}
       />
       <div className="main-container">
         {workspaces.length > 0 && (
@@ -445,6 +460,7 @@ function App() {
         <main className="content-area">
           <div className="fade-in-tab">{renderActiveTab()}</div>
         </main>
+        <FooterAdBanner onOpenPrivacy={() => setIsTermsModalOpen(true)} />
       </div>
 
       {/* Promotion Dialog / Modal */}
@@ -521,6 +537,15 @@ function App() {
           setWorkspaces(updated);
           handleSelectWorkspace(wsId);
         }}
+      />
+
+      <TermsPrivacyModal
+        isOpen={isTermsModalOpen}
+        onClose={() => setIsTermsModalOpen(false)}
+      />
+
+      <CookieConsentBanner
+        onOpenTerms={() => setIsTermsModalOpen(true)}
       />
     </div>
   );

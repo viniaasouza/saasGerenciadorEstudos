@@ -8,8 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test": "node test-autopilot.mjs && node test-sm2.mjs && node test-backup.mjs && node test-security-and-syllabus.mjs && node test-admin-and-cleanup.mjs",
-    "test:autopilot": "node test-autopilot.mjs && node test-sm2.mjs && node test-backup.mjs && node test-security-and-syllabus.mjs && node test-admin-and-cleanup.mjs"
+    "test": "node test-autopilot.mjs && node test-sm2.mjs && node test-backup.mjs && node test-security-and-syllabus.mjs && node test-admin-and-cleanup.mjs && node test-gamification-and-compliance.mjs",
+    "test:autopilot": "node test-autopilot.mjs && node test-sm2.mjs && node test-backup.mjs && node test-security-and-syllabus.mjs && node test-admin-and-cleanup.mjs && node test-gamification-and-compliance.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.116.0",

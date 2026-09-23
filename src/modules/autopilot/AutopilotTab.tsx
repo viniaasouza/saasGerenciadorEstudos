@@ -9,13 +9,18 @@ import type {
   AutopilotSettings,
   AutopilotDayMission,
   AutopilotTask,
+  GamificationProfile,
+  GamificationActionType,
 } from '../../types';
+import { useAuth } from '../../context/AuthContext';
 import {
   getTodayMission,
   calculateMissionProgress,
   formatLongPortugueseDate,
   getLocalDateString,
 } from './autopilotEngine';
+import { GamificationWidget } from './GamificationWidget';
+import { calculateQuestionXp, XP_CONFIG } from './gamification';
 import { FlashcardReviewModal } from '../flashcards/FlashcardReviewModal';
 import { AiSyllabusImportModal } from '../syllabus/AiSyllabusImportModal';
 import {
@@ -56,6 +61,8 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
   onStartStudy,
   onRefreshStats,
 }) => {
+  const { user } = useAuth();
+
   // Core loaded state
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [cycleBlocks, setCycleBlocks] = useState<StudyBlock[]>([]);
@@ -66,6 +73,28 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
     db.getAutopilotSettings(activeWorkspaceId)
   );
   const [todaySecondsStudied, setTodaySecondsStudied] = useState<number>(0);
+
+  // Gamification state
+  const [gamificationProfile, setGamificationProfile] = useState<GamificationProfile>(() =>
+    db.getGamificationProfile()
+  );
+  const [recentXpAward, setRecentXpAward] = useState<{
+    amount: number;
+    description: string;
+    id: number;
+  } | null>(null);
+
+  const triggerXpAward = useCallback(
+    (type: GamificationActionType, amount: number, description: string) => {
+      const res = db.awardXpAction(type, amount, description, activeWorkspaceId);
+      setGamificationProfile(res.profile);
+      setRecentXpAward({ amount, description, id: Date.now() });
+      if (res.levelUp) {
+        showToast(`🎉 PARABÉNS! Você subiu de nível! Agora é Nível ${res.newLevel}!`);
+      }
+    },
+    [activeWorkspaceId]
+  );
 
   // Dynamic engine state
   const [extraBlockIds, setExtraBlockIds] = useState<string[]>([]);
@@ -139,6 +168,7 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
     setTempSettings(stt);
     setTodayQuestions(todayQ);
     setTodaySecondsStudied(todayS);
+    setGamificationProfile(db.getGamificationProfile());
   }, [activeWorkspaceId]);
 
   useEffect(() => {
@@ -174,6 +204,15 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
     [mission, reviewedFlashcardsToday]
   );
 
+  // User contest target for leaderboard
+  const userConcursoTarget = useMemo(() => {
+    if (!activeWorkspaceId) return undefined;
+    const info = db.getConcursoInfo(activeWorkspaceId);
+    if (!info) return undefined;
+    const parts = [info.concurso, info.cargo].filter(Boolean);
+    return parts.length > 0 ? parts.join(' • ') : undefined;
+  }, [activeWorkspaceId]);
+
   // Flashcards due today
   const dueFlashcards = useMemo(() => {
     const todayStr = getLocalDateString();
@@ -183,9 +222,19 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
   // Handlers
   const handleToggleReviewDone = (reviewId: string) => {
     const todayIso = new Date().toISOString();
+    let justCompleted = false;
+    let justUndone = false;
+    let revTopicName = '';
     const updated = revisoes.map((r) => {
       if (r.id === reviewId) {
         const nextDone = !r.done;
+        if (nextDone) {
+          justCompleted = true;
+          revTopicName = r.topicName;
+        } else {
+          justUndone = true;
+          revTopicName = r.topicName;
+        }
         return {
           ...r,
           done: nextDone,
@@ -196,10 +245,19 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
     });
     db.saveRevisoes(activeWorkspaceId, updated);
     setRevisoes(updated);
+    if (justCompleted) {
+      triggerXpAward('review_completed', XP_CONFIG.REVIEW_COMPLETED, `Revisão concluída: ${revTopicName}`);
+      showToast(`✓ Revisão concluída! +${XP_CONFIG.REVIEW_COMPLETED} XP!`);
+    } else if (justUndone) {
+      triggerXpAward('review_completed', -XP_CONFIG.REVIEW_COMPLETED, `Revisão desfeita: ${revTopicName}`);
+      showToast(`Revisão desfeita (-${XP_CONFIG.REVIEW_COMPLETED} XP)`);
+    }
     if (onRefreshStats) onRefreshStats();
   };
 
   const handleMarkTheoryCompleted = (task: AutopilotTask) => {
+    if (task.theoryCompleted) return;
+
     const duration = task.theoryMinutes * 60;
     const { scheduledReview } = db.completeSubtopicAndAdvance(
       activeWorkspaceId,
@@ -210,15 +268,21 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
       task.blockId
     );
 
+    triggerXpAward(
+      'theory_completed',
+      XP_CONFIG.THEORY_COMPLETED,
+      `Teoria concluída: ${task.subtopicName}`
+    );
+
     loadWorkspaceData();
     if (onRefreshStats) onRefreshStats();
 
     if (scheduledReview) {
       showToast(
-        `✓ Teoria de "${task.subtopicName}" concluída! Revisão de 24h (D+1) programada para amanhã.`
+        `✓ +${XP_CONFIG.THEORY_COMPLETED} XP! Teoria de "${task.subtopicName}" concluída! Revisão de 24h (D+1) programada para amanhã.`
       );
     } else {
-      showToast(`✓ Teoria de "${task.subtopicName}" marcada como concluída!`);
+      showToast(`✓ +${XP_CONFIG.THEORY_COMPLETED} XP! Teoria de "${task.subtopicName}" marcada como concluída!`);
     }
   };
 
@@ -254,19 +318,27 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
     );
 
     const pct = Math.round((correctNum / attemptedNum) * 100);
+    const xpEarned = calculateQuestionXp(attemptedNum, correctNum);
+
     setQuestionInputs((prev) => ({
       ...prev,
       [task.id]: {
         ...input,
         attempted: attemptedNum,
         correct: correctNum,
-        feedback: `✓ Registrado: ${correctNum}/${attemptedNum} (${pct}%)`,
+        feedback: `✓ Registrado: ${correctNum}/${attemptedNum} (${pct}%) • +${xpEarned} XP`,
       },
     }));
 
+    triggerXpAward(
+      'questions_saved',
+      xpEarned,
+      `${attemptedNum} questões (${correctNum} acertos)`
+    );
+
     loadWorkspaceData();
     if (onRefreshStats) onRefreshStats();
-    showToast(`🎯 ${attemptedNum} questões registradas (${pct}% de acertos)!`);
+    showToast(`🎯 +${xpEarned} XP! ${attemptedNum} questões registradas (${pct}% de acertos)!`);
   };
 
   const handleSaveSettings = (e: React.FormEvent) => {
@@ -522,6 +594,15 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
         </div>
       ) : (
         <>
+          {/* GAMIFICATION & LEADERBOARD WIDGET */}
+          <GamificationWidget
+            profile={gamificationProfile}
+            userName={user?.name || 'Você'}
+            userConcursoTarget={userConcursoTarget}
+            todayStr={getLocalDateString()}
+            recentXpAward={recentXpAward}
+          />
+
           {/* CARD 1: REVISÕES RÁPIDAS DE HOJE */}
           <section style={{ marginBottom: '2rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.9rem' }}>
@@ -603,7 +684,7 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
                 }}
               >
                 <Brain size={16} />
-                Revisar {dueFlashcards.length} Flashcard{dueFlashcards.length > 1 ? 's' : ''}
+                Revisar {dueFlashcards.length} Flashcard{dueFlashcards.length > 1 ? 's' : ''} (+10 XP/card)
               </button>
             </div>
           )}
@@ -695,7 +776,7 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
                         color: rev.done ? 'var(--text-muted)' : '#ffffff',
                       }}
                     >
-                      {rev.done ? 'Desfazer' : '✓ Concluir'}
+                      {rev.done ? 'Desfazer' : '✓ Concluir (+30 XP)'}
                     </button>
                   </div>
                 );
@@ -1017,6 +1098,7 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
 
                       <button
                         onClick={() => handleMarkTheoryCompleted(task)}
+                        disabled={task.theoryCompleted}
                         style={{
                           backgroundColor: task.theoryCompleted ? 'var(--bg-card)' : 'var(--color-primary)',
                           color: task.theoryCompleted ? 'var(--color-success)' : '#ffffff',
@@ -1028,10 +1110,12 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
                           display: 'flex',
                           alignItems: 'center',
                           gap: '5px',
+                          cursor: task.theoryCompleted ? 'default' : 'pointer',
+                          opacity: task.theoryCompleted ? 0.9 : 1,
                         }}
                       >
                         <CheckCircle2 size={14} />
-                        {task.theoryCompleted ? 'Teoria Concluída ✓' : 'Marcar Teoria Concluída'}
+                        {task.theoryCompleted ? 'Teoria Concluída (+50 XP) ✓' : 'Marcar Teoria Concluída (+50 XP)'}
                       </button>
                     </div>
                   </div>
@@ -1172,7 +1256,7 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
                         }}
                       >
                         <Award size={14} />
-                        Salvar Desempenho
+                        Salvar Desempenho (+{calculateQuestionXp(Number(taskInput.attempted) || 0, Number(taskInput.correct) || 0)} XP)
                       </button>
 
                       {task.questionsAttempted > 0 && (
@@ -1342,6 +1426,7 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
             const key = `concurso_estudos_fc_reviewed_${activeWorkspaceId}_${getLocalDateString()}`;
             localStorage.setItem(key, String(nextCount));
           }
+          triggerXpAward('flashcard_reviewed', XP_CONFIG.FLASHCARD_REVIEWED, 'Flashcard revisado (SM-2)');
         }}
         onClose={() => {
           setIsReviewModalOpen(false);

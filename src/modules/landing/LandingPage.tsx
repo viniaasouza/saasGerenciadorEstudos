@@ -4,11 +4,13 @@ import {
   ArrowRight, Copy, Check, MessageSquare, LogIn, Bot
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { FooterAdBanner } from '../../components/FooterAdBanner';
 
 interface LandingPageProps {
   onEnterApp: () => void;
   onOpenAuth: (mode?: 'login' | 'signup') => void;
   onOpenFeedback: () => void;
+  onOpenTerms?: () => void;
   theme: 'dark' | 'light';
   toggleTheme: () => void;
 }
@@ -57,6 +59,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   onEnterApp,
   onOpenAuth,
   onOpenFeedback,
+  onOpenTerms,
 }) => {
   const { user } = useAuth();
   const [copiedPrompt, setCopiedPrompt] = useState(false);
@@ -594,6 +597,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </div>
       </section>
 
+      {/* Discreet Footer Ad Banner */}
+      <FooterAdBanner onOpenPrivacy={onOpenTerms} />
+
       {/* Footer */}
       <footer
         style={{
@@ -611,7 +617,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             <span>— Ciclo Inteligente, Edital Verticalizado & SM-2</span>
           </div>
 
-          <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            {onOpenTerms && (
+              <button
+                onClick={onOpenTerms}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.85rem' }}
+              >
+                Termos & Privacidade (LGPD)
+              </button>
+            )}
             <button
               onClick={onOpenFeedback}
               style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.85rem' }}

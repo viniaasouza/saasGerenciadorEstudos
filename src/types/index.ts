@@ -227,3 +227,49 @@ export interface AutopilotDayMission {
   tomorrow?: AutopilotTomorrowPreview;
   reviewedFlashcardsCount?: number;
 }
+
+export type GamificationActionType =
+  | 'theory_completed'
+  | 'questions_saved'
+  | 'flashcard_reviewed'
+  | 'review_completed'
+  | 'streak_bonus';
+
+export interface GamificationAction {
+  id: string;
+  type: GamificationActionType;
+  xpAwarded: number;
+  timestamp: string;
+  description: string;
+  workspaceId?: string;
+}
+
+export interface StudentLevel {
+  level: number;
+  title: string;
+  minXp: number;
+  maxXp: number;
+  badge: string;
+}
+
+export interface GamificationProfile {
+  totalXp: number;
+  dailyXp: Record<string, number>; // 'YYYY-MM-DD' -> points
+  currentStreak: number;
+  longestStreak: number;
+  lastActiveDate?: string;
+  history?: GamificationAction[];
+}
+
+export interface LeaderboardEntry {
+  id: string;
+  name: string;
+  avatar?: string;
+  concursoTarget: string;
+  pointsToday: number;
+  streakDays: number;
+  levelTitle: string;
+  level: number;
+  isCurrentUser: boolean;
+  rank?: number;
+}
