@@ -63,12 +63,16 @@ export const FlashcardsTab: React.FC<FlashcardsTabProps> = ({ activeWorkspaceId 
     setSubjects(db.getSubjects(activeWorkspaceId));
   }, [activeWorkspaceId]);
 
-  // Keep all subjects expanded by default when subjects load
+  // Automatically expand all active subject decks by default whenever cards or subjects change
   useEffect(() => {
-    if (subjects.length > 0) {
-      setExpandedSubjectIds(new Set(subjects.map((s) => s.id).concat(['geral'])));
-    }
-  }, [subjects]);
+    setExpandedSubjectIds((prev) => {
+      const next = new Set(prev);
+      subjects.forEach((s) => next.add(s.id));
+      cards.forEach((c) => next.add(c.subjectId || 'geral'));
+      next.add('geral');
+      return next;
+    });
+  }, [subjects, cards]);
 
   const handleSaveCard = (savedCard: Flashcard) => {
     setCards((prev) => {
@@ -107,6 +111,7 @@ export const FlashcardsTab: React.FC<FlashcardsTabProps> = ({ activeWorkspaceId 
       setExpandedSubjectIds(new Set());
     } else {
       const allIds = new Set(subjects.map((s) => s.id).concat(['geral']));
+      cards.forEach((c) => allIds.add(c.subjectId || 'geral'));
       setExpandedSubjectIds(allIds);
     }
   };
@@ -213,15 +218,37 @@ export const FlashcardsTab: React.FC<FlashcardsTabProps> = ({ activeWorkspaceId 
   const reviewCount = cards.filter((c) => c.state === 'review').length;
   const retentionRate = totalCards > 0 ? Math.round((reviewCount / totalCards) * 100) : 0;
 
-  // Start Review Session (all workspace due, or specific group due cards)
-  const handleStartReview = (cardsToReview?: Flashcard[]) => {
-    const queue = cardsToReview && cardsToReview.length > 0 ? cardsToReview : dueCards;
-    if (queue.length === 0) {
-      alert('Não há flashcards devidos para revisão hoje nesta seleção!');
+  // Start Review Session (due cards, or specific selection, or free reinforcement mode)
+  const handleStartReview = (cardsSelection?: Flashcard[]) => {
+    // If a specific set was passed (e.g. deck group or single card)
+    if (cardsSelection && cardsSelection.length > 0) {
+      const dueInSelection = cardsSelection.filter((c) => c.dueDate <= todayStr);
+      if (dueInSelection.length > 0) {
+        setReviewQueue(dueInSelection);
+      } else {
+        // Free reinforcement mode with selected cards
+        setReviewQueue(cardsSelection);
+      }
+      setIsReviewModalOpen(true);
       return;
     }
-    setReviewQueue(queue);
-    setIsReviewModalOpen(true);
+
+    // Global review: prioritize due cards
+    if (dueCards.length > 0) {
+      setReviewQueue(dueCards);
+      setIsReviewModalOpen(true);
+      return;
+    }
+
+    // Free reinforcement mode with all available cards
+    const allAvailable = filteredCards.length > 0 ? filteredCards : cards;
+    if (allAvailable.length > 0) {
+      setReviewQueue(allAvailable);
+      setIsReviewModalOpen(true);
+      return;
+    }
+
+    alert('Nenhum flashcard disponível para revisão.');
   };
 
   // Export to Anki (.txt UTF-8 compatible format)
@@ -365,8 +392,28 @@ export const FlashcardsTab: React.FC<FlashcardsTabProps> = ({ activeWorkspaceId 
               </div>
             </div>
 
-            {/* Actions: Edit & Delete */}
-            <div style={{ display: 'flex', gap: '2px' }}>
+            {/* Actions: Practice, Edit & Delete */}
+            <div style={{ display: 'flex', gap: '3px', alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={() => handleStartReview([card])}
+                style={{
+                  color: 'var(--color-primary)',
+                  backgroundColor: 'var(--color-primary-glow)',
+                  border: '1px solid rgba(129, 140, 248, 0.3)',
+                  padding: '3px 8px',
+                  borderRadius: '6px',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '3px',
+                  cursor: 'pointer',
+                }}
+                title="Praticar ou revisar este card individual agora"
+              >
+                <Play size={10} fill="currentColor" /> Praticar
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -399,8 +446,9 @@ export const FlashcardsTab: React.FC<FlashcardsTabProps> = ({ activeWorkspaceId 
             </div>
           </div>
 
-          {/* Card Front Content (Cloze reveals if card is expanded) */}
+          {/* Card Front Content (Cloze reveals if card is expanded; click to flip) */}
           <div
+            onClick={() => toggleExpandCard(card.id)}
             style={{
               margin: '0.75rem 0 0.5rem',
               padding: '0.75rem',
@@ -410,7 +458,9 @@ export const FlashcardsTab: React.FC<FlashcardsTabProps> = ({ activeWorkspaceId 
               fontSize: '0.9rem',
               color: 'var(--text-title)',
               minHeight: '60px',
+              cursor: 'pointer',
             }}
+            title="Clique para virar o card e ver a resposta"
           >
             <FormattedText text={card.front} isAnswerRevealed={isExpanded} />
           </div>
@@ -535,7 +585,7 @@ export const FlashcardsTab: React.FC<FlashcardsTabProps> = ({ activeWorkspaceId 
 
           <button
             type="button"
-            onClick={() => handleStartReview(dueCards)}
+            onClick={() => handleStartReview()}
             className="mock-btn"
             style={{
               display: 'flex',
@@ -544,12 +594,21 @@ export const FlashcardsTab: React.FC<FlashcardsTabProps> = ({ activeWorkspaceId 
               padding: '0.65rem 1.4rem',
               fontWeight: 700,
               backgroundColor: dueTodayCount > 0 ? 'var(--color-primary)' : 'var(--bg-element)',
-              color: dueTodayCount > 0 ? 'var(--text-inverse)' : 'var(--text-muted)',
+              color: dueTodayCount > 0 ? 'var(--text-inverse)' : 'var(--text-title)',
               border: dueTodayCount > 0 ? 'none' : '1px solid var(--border-color)',
+              cursor: totalCards > 0 ? 'pointer' : 'default',
+              opacity: totalCards > 0 ? 1 : 0.6,
             }}
+            title={
+              dueTodayCount > 0
+                ? `Revisar os ${dueTodayCount} cards devidos hoje`
+                : totalCards > 0
+                ? 'Praticar todos os cards em modo reforço livre'
+                : 'Nenhum flashcard criado ainda'
+            }
           >
-            <Play size={16} fill="currentColor" />
-            Revisar Hoje ({dueTodayCount})
+            <Play size={16} fill={dueTodayCount > 0 ? 'currentColor' : 'none'} />
+            {dueTodayCount > 0 ? `Revisar Hoje (${dueTodayCount})` : `Praticar Todos (${totalCards})`}
           </button>
         </div>
       </div>
@@ -959,7 +1018,7 @@ export const FlashcardsTab: React.FC<FlashcardsTabProps> = ({ activeWorkspaceId 
                     {/* Review this subject deck button */}
                     <button
                       type="button"
-                      onClick={() => handleStartReview(groupDueCards)}
+                      onClick={() => handleStartReview(groupDueCount > 0 ? groupDueCards : group.cards)}
                       className="mock-btn"
                       style={{
                         padding: '0.45rem 0.9rem',
@@ -969,13 +1028,13 @@ export const FlashcardsTab: React.FC<FlashcardsTabProps> = ({ activeWorkspaceId 
                         alignItems: 'center',
                         gap: '0.35rem',
                         backgroundColor: groupDueCount > 0 ? 'var(--color-primary)' : 'var(--bg-element)',
-                        color: groupDueCount > 0 ? 'var(--text-inverse)' : 'var(--text-muted)',
+                        color: groupDueCount > 0 ? 'var(--text-inverse)' : 'var(--text-title)',
                         border: groupDueCount > 0 ? 'none' : '1px solid var(--border-color)',
-                        opacity: groupDueCount > 0 ? 1 : 0.7,
                       }}
-                      title={groupDueCount > 0 ? `Revisar os ${groupDueCount} cards devidos desta matéria` : 'Nenhum card desta matéria devido hoje'}
+                      title={groupDueCount > 0 ? `Revisar os ${groupDueCount} cards devidos desta matéria` : `Praticar os ${group.cards.length} cards desta matéria (modo livre)`}
                     >
-                      <Play size={13} fill="currentColor" /> Revisar ({groupDueCount})
+                      <Play size={13} fill={groupDueCount > 0 ? 'currentColor' : 'none'} />
+                      {groupDueCount > 0 ? `Revisar (${groupDueCount})` : `Praticar (${group.cards.length})`}
                     </button>
 
                     {/* Add card in this subject */}

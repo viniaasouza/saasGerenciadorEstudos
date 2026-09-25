@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { X, CheckCircle2, Trophy } from 'lucide-react';
 import type { Flashcard } from '../../types';
 import { FormattedText } from './FormattedText';
-import { calculateSM2, getIntervalPreviews, type ReviewRating } from './sm2';
+import { calculateSM2, getIntervalPreviews, formatLocalDate, type ReviewRating } from './sm2';
 
 interface FlashcardReviewModalProps {
   isOpen: boolean;
@@ -364,8 +364,11 @@ export const FlashcardReviewModal: React.FC<FlashcardReviewModalProps> = ({
         ) : (
           /* Active Review Flow */
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: '1.5rem', justifyContent: 'center' }}>
-            {/* Front Card Area */}
+            {/* Front Card Area (Clickable to reveal answer) */}
             <div
+              onClick={() => {
+                if (!isAnswerRevealed) setIsAnswerRevealed(true);
+              }}
               style={{
                 backgroundColor: 'var(--bg-element)',
                 borderRadius: 'var(--radius-lg)',
@@ -377,20 +380,37 @@ export const FlashcardReviewModal: React.FC<FlashcardReviewModalProps> = ({
                 display: 'flex',
                 flexDirection: 'column',
                 justifyContent: 'center',
+                cursor: !isAnswerRevealed ? 'pointer' : 'default',
               }}
+              title={!isAnswerRevealed ? 'Clique para mostrar a resposta (ou tecle Espaço)' : undefined}
             >
-              <span
-                style={{
-                  fontSize: '0.7rem',
-                  fontWeight: 800,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                  color: 'var(--text-muted)',
-                  marginBottom: '0.5rem',
-                }}
-              >
-                Frente
-              </span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <span
+                  style={{
+                    fontSize: '0.7rem',
+                    fontWeight: 800,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    color: 'var(--text-muted)',
+                  }}
+                >
+                  Frente {!isAnswerRevealed && '• (Clique ou tecle Espaço para virar)'}
+                </span>
+                {currentCard && currentCard.dueDate > formatLocalDate(new Date()) && (
+                  <span
+                    style={{
+                      fontSize: '0.65rem',
+                      fontWeight: 700,
+                      padding: '2px 6px',
+                      borderRadius: '4px',
+                      backgroundColor: 'rgba(99, 102, 241, 0.15)',
+                      color: 'var(--color-primary)',
+                    }}
+                  >
+                    Reforço Livre
+                  </span>
+                )}
+              </div>
               <FormattedText text={currentCard.front} isAnswerRevealed={isAnswerRevealed} />
             </div>
 

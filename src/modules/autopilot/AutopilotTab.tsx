@@ -694,6 +694,8 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
               style={{
                 display: 'flex',
                 alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
                 gap: '8px',
                 padding: '10px 14px',
                 backgroundColor: 'rgba(16, 185, 129, 0.08)',
@@ -705,8 +707,76 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
                 fontSize: '0.85rem',
               }}
             >
-              <CheckCircle2 size={18} />
-              <span>✓ {reviewedFlashcardsToday} flashcard(s) revisados hoje com algoritmo SM-2! Deck em dia.</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <CheckCircle2 size={18} />
+                <span>✓ {reviewedFlashcardsToday} flashcard(s) revisados hoje com algoritmo SM-2! Deck em dia.</span>
+              </div>
+              {flashcards.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setIsReviewModalOpen(true)}
+                  style={{
+                    backgroundColor: 'var(--bg-card)',
+                    color: 'var(--text-title)',
+                    border: '1px solid var(--border-color)',
+                    padding: '5px 12px',
+                    borderRadius: '8px',
+                    fontSize: '0.8rem',
+                    fontWeight: 600,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    cursor: 'pointer',
+                  }}
+                  title="Praticar todos os cards em modo livre"
+                >
+                  <Brain size={14} /> Reforço Livre ({flashcards.length})
+                </button>
+              )}
+            </div>
+          )}
+
+          {dueFlashcards.length === 0 && reviewedFlashcardsToday === 0 && flashcards.length > 0 && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '8px',
+                padding: '10px 14px',
+                backgroundColor: 'var(--bg-element)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '10px',
+                marginBottom: mission.dueReviews.length > 0 ? '1rem' : '0',
+                color: 'var(--text-title)',
+                fontSize: '0.85rem',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Brain size={18} style={{ color: 'var(--color-primary)' }} />
+                <span>Você tem <strong>{flashcards.length}</strong> flashcards cadastrados (nenhum vence hoje).</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsReviewModalOpen(true)}
+                style={{
+                  backgroundColor: 'var(--bg-card)',
+                  color: 'var(--text-title)',
+                  border: '1px solid var(--border-color)',
+                  padding: '5px 12px',
+                  borderRadius: '8px',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  cursor: 'pointer',
+                }}
+                title="Praticar todos os cards em modo livre"
+              >
+                <Brain size={14} /> Praticar em Modo Livre
+              </button>
             </div>
           )}
 
@@ -1415,7 +1485,7 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
       {/* FLASHCARD REVIEW MODAL */}
       <FlashcardReviewModal
         isOpen={isReviewModalOpen}
-        cards={dueFlashcards}
+        cards={dueFlashcards.length > 0 ? dueFlashcards : flashcards}
         onSaveCard={(card) => {
           const updated = flashcards.map((c) => (c.id === card.id ? card : c));
           db.saveFlashcards(activeWorkspaceId, updated);

@@ -22,6 +22,7 @@ export const FlashcardModal: React.FC<FlashcardModalProps> = ({
   subjects,
 }) => {
   const [subjectId, setSubjectId] = useState('');
+  const [customSubject, setCustomSubject] = useState('');
   const [topicName, setTopicName] = useState('');
   const [customTopic, setCustomTopic] = useState('');
   const [front, setFront] = useState('');
@@ -45,9 +46,18 @@ export const FlashcardModal: React.FC<FlashcardModalProps> = ({
         const matchedSub = subjects.find(
           (s) => s.id === initialData.subjectId || (initialData.subjectName && s.name.toLowerCase() === initialData.subjectName.toLowerCase())
         );
-        const resolvedSubId = matchedSub?.id || initialData.subjectId || subjects[0]?.id || '';
-        setSubjectId(resolvedSubId);
+        if (matchedSub) {
+          setSubjectId(matchedSub.id);
+          setCustomSubject('');
+        } else if (initialData.subjectName && initialData.subjectName.toLowerCase() !== 'geral') {
+          setSubjectId('__custom_subject__');
+          setCustomSubject(initialData.subjectName);
+        } else {
+          setSubjectId(subjects[0]?.id || 'geral');
+          setCustomSubject('');
+        }
 
+        const resolvedSubId = matchedSub?.id || initialData.subjectId || subjects[0]?.id || '';
         const subTopics = matchedSub?.topics || subjects.find((s) => s.id === resolvedSubId)?.topics || [];
         const topicInList = subTopics.some((t) => t.name === initialData.topicName);
 
@@ -60,7 +70,7 @@ export const FlashcardModal: React.FC<FlashcardModalProps> = ({
             setCustomTopic(initialData.topicName);
           }
         } else {
-          setTopicName(subTopics[0]?.name || '');
+          setTopicName(subTopics[0]?.name || '__custom__');
           setCustomTopic('');
         }
 
@@ -69,8 +79,15 @@ export const FlashcardModal: React.FC<FlashcardModalProps> = ({
         setTagsInput(initialData.tags ? initialData.tags.join(', ') : '');
       } else {
         const defaultSub = subjects[0];
-        setSubjectId(defaultSub?.id || '');
-        setTopicName(defaultSub?.topics[0]?.name || '');
+        if (defaultSub) {
+          setSubjectId(defaultSub.id);
+          setCustomSubject('');
+          setTopicName(defaultSub.topics[0]?.name || '__custom__');
+        } else {
+          setSubjectId('geral');
+          setCustomSubject('');
+          setTopicName('__custom__');
+        }
         setCustomTopic('');
         setFront('');
         setBack('');
@@ -100,11 +117,15 @@ export const FlashcardModal: React.FC<FlashcardModalProps> = ({
 
   const handleSubjectChange = (newSubId: string) => {
     setSubjectId(newSubId);
-    const sub = subjects.find((s) => s.id === newSubId);
-    if (sub && sub.topics.length > 0) {
-      setTopicName(sub.topics[0].name);
+    if (newSubId === '__custom_subject__' || newSubId === 'geral') {
+      setTopicName('__custom__');
     } else {
-      setTopicName('');
+      const sub = subjects.find((s) => s.id === newSubId);
+      if (sub && sub.topics.length > 0) {
+        setTopicName(sub.topics[0].name);
+      } else {
+        setTopicName('__custom__');
+      }
     }
   };
 
@@ -129,6 +150,24 @@ export const FlashcardModal: React.FC<FlashcardModalProps> = ({
       ? (customTopic.trim() || 'Geral')
       : topicName;
 
+    let finalSubjectId = 'geral';
+    let finalSubjectName = 'Geral';
+
+    if (subjectId === '__custom_subject__') {
+      const trimmed = customSubject.trim() || 'Geral';
+      finalSubjectName = trimmed;
+      finalSubjectId = `custom-${trimmed.toLowerCase().replace(/[^a-z0-9]/g, '-') || Date.now()}`;
+    } else if (subjectId === 'geral') {
+      finalSubjectId = 'geral';
+      finalSubjectName = 'Geral';
+    } else if (currentSubject) {
+      finalSubjectId = currentSubject.id;
+      finalSubjectName = currentSubject.name;
+    } else if (initialData?.subjectName) {
+      finalSubjectId = initialData.subjectId || 'geral';
+      finalSubjectName = initialData.subjectName;
+    }
+
     const parsedTags = tagsInput
       .split(',')
       .map((t) => t.trim().toLowerCase())
@@ -140,8 +179,8 @@ export const FlashcardModal: React.FC<FlashcardModalProps> = ({
     const card: Flashcard = {
       id: initialData?.id || `card-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
       workspaceId,
-      subjectId: currentSubject?.id || subjectId || 'geral',
-      subjectName: currentSubject?.name || initialData?.subjectName || 'Geral',
+      subjectId: finalSubjectId,
+      subjectName: finalSubjectName,
       topicName: finalTopicName,
       subtopicName: initialData?.subtopicName,
       front: front.trim(),
@@ -324,6 +363,8 @@ export const FlashcardModal: React.FC<FlashcardModalProps> = ({
                     {sub.name}
                   </option>
                 ))}
+                <option value="geral">Geral / Concurso</option>
+                <option value="__custom_subject__">➕ Nova Matéria Personalizada</option>
               </select>
             </div>
 
@@ -348,14 +389,35 @@ export const FlashcardModal: React.FC<FlashcardModalProps> = ({
                     {t.name}
                   </option>
                 ))}
-                <option value="__custom__">➕ Outro Tópico Personalizado</option>
+                <option value="__custom__">➕ {currentTopics.length === 0 ? 'Tópico Personalizado' : 'Outro Tópico Personalizado'}</option>
               </select>
             </div>
           </div>
 
-          {topicName === '__custom__' && (
+          {/* Custom Subject Input if selected */}
+          {subjectId === '__custom_subject__' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-              <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Nome do Novo Tópico</label>
+              <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Nome da Nova Matéria</label>
+              <input
+                type="text"
+                placeholder="Ex: Direito Constitucional"
+                value={customSubject}
+                onChange={(e) => setCustomSubject(e.target.value)}
+                style={{
+                  padding: '0.65rem',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-color)',
+                  backgroundColor: 'var(--bg-element)',
+                  color: 'var(--text-title)',
+                  fontSize: '0.9rem',
+                }}
+              />
+            </div>
+          )}
+
+          {(topicName === '__custom__' || currentTopics.length === 0) && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+              <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Nome do Tópico / Assunto</label>
               <input
                 type="text"
                 placeholder="Ex: Recursos no Processo Civil"
