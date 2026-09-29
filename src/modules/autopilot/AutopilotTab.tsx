@@ -1214,28 +1214,67 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
                         </div>
                       </div>
 
-                      {/* Surgical Gran Questions Link */}
-                      <a
-                        href={task.granQuestionsUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{
-                          backgroundColor: 'rgba(245, 158, 11, 0.12)',
-                          color: '#d97706',
-                          border: '1px solid rgba(245, 158, 11, 0.3)',
-                          padding: '8px 14px',
-                          borderRadius: '8px',
-                          fontSize: '0.85rem',
-                          fontWeight: 700,
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          textDecoration: 'none',
-                        }}
-                      >
-                        <ExternalLink size={15} />
-                        Abrir no Gran Questões (Filtro Cirúrgico)
-                      </a>
+                      {/* Surgical Gran Questions Link & Quick Banca Switcher */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', backgroundColor: 'var(--bg-element)', padding: '2px 5px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                          <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)' }}>Banca:</span>
+                          {(['FCC', 'Cebraspe', 'FGV'] as const).map((b) => {
+                            const isCurrent = settings.banca.toUpperCase() === b.toUpperCase();
+                            return (
+                              <button
+                                key={b}
+                                type="button"
+                                onClick={() => {
+                                  const idMap: Record<string, number> = { FCC: 92, Cebraspe: 27, FGV: 102 };
+                                  const updated: AutopilotSettings = {
+                                    ...settings,
+                                    banca: b,
+                                    bancaId: idMap[b] || 92,
+                                  };
+                                  setSettings(updated);
+                                  db.saveAutopilotSettings(activeWorkspaceId, updated);
+                                  showToast(`🎯 Banca das questões alterada para ${b}!`);
+                                }}
+                                style={{
+                                  padding: '3px 8px',
+                                  borderRadius: '5px',
+                                  fontSize: '0.72rem',
+                                  fontWeight: isCurrent ? 800 : 600,
+                                  backgroundColor: isCurrent ? 'var(--color-primary)' : 'transparent',
+                                  color: isCurrent ? '#ffffff' : 'var(--text-muted)',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.15s ease',
+                                }}
+                              >
+                                {b}
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        <a
+                          href={task.granQuestionsUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{
+                            backgroundColor: 'rgba(245, 158, 11, 0.12)',
+                            color: '#d97706',
+                            border: '1px solid rgba(245, 158, 11, 0.3)',
+                            padding: '8px 14px',
+                            borderRadius: '8px',
+                            fontSize: '0.85rem',
+                            fontWeight: 700,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            textDecoration: 'none',
+                          }}
+                        >
+                          <ExternalLink size={15} />
+                          Abrir no Gran Questões ({settings.banca})
+                        </a>
+                      </div>
                     </div>
 
                     {/* In-place quick question registration */}

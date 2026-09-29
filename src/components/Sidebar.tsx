@@ -128,28 +128,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {hasExamDate && concursoInfo?.dataProva && (!isCollapsed ? (
         <div className="countdown-full" style={{
           margin: '0.75rem 1rem 0.25rem',
-          background: 'linear-gradient(135deg, #c8102e, #8e0b1f)',
+          background: 'linear-gradient(135deg, #ef4444, #be123c)',
           borderRadius: '12px',
           padding: '12px 14px',
           color: '#ffffff',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          boxShadow: '0 4px 12px rgba(200, 16, 46, 0.25)'
+          boxShadow: '0 4px 14px rgba(239, 68, 68, 0.35)',
+          border: '1px solid rgba(254, 202, 202, 0.3)'
         }}>
           <div>
-            <div style={{ fontSize: '0.65rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px', opacity: 0.85 }}>
+            <div style={{ fontSize: '0.65rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px', color: '#fee2e2' }}>
               {concursoInfo?.banca ? concursoInfo.banca.split(' ')[0] : 'Prova'} • Alvo
             </div>
-            <div style={{ fontSize: '0.8rem', fontWeight: 700, marginTop: '2px' }}>
+            <div style={{ fontSize: '0.85rem', fontWeight: 800, marginTop: '2px', color: '#ffffff', textShadow: '0 1px 2px rgba(0,0,0,0.2)' }}>
               {new Date(concursoInfo.dataProva + 'T00:00:00').toLocaleDateString('pt-BR')}
             </div>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '1.6rem', fontWeight: 900, lineHeight: 1 }}>
+            <div style={{ fontSize: '1.65rem', fontWeight: 900, lineHeight: 1, color: '#ffffff', textShadow: '0 2px 4px rgba(0,0,0,0.25)' }}>
               {daysRemaining > 0 ? daysRemaining : 0}
             </div>
-            <div style={{ fontSize: '0.65rem', opacity: 0.85 }}>dias</div>
+            <div style={{ fontSize: '0.7rem', color: '#fee2e2', fontWeight: 800, letterSpacing: '0.5px' }}>dias</div>
           </div>
         </div>
       ) : (
@@ -157,7 +158,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           className="countdown-compact"
           style={{
             margin: '0.5rem 0.4rem 0.25rem',
-            background: 'linear-gradient(135deg, #c8102e, #8e0b1f)',
+            background: 'linear-gradient(135deg, #ef4444, #be123c)',
             borderRadius: '10px',
             padding: '8px 2px',
             color: '#ffffff',
@@ -166,15 +167,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
             alignItems: 'center',
             justifyContent: 'center',
             textAlign: 'center',
-            boxShadow: '0 4px 10px rgba(200, 16, 46, 0.25)',
+            boxShadow: '0 4px 12px rgba(239, 68, 68, 0.35)',
+            border: '1px solid rgba(254, 202, 202, 0.35)',
             cursor: 'pointer'
           }}
           title={`Prova ${concursoInfo?.concurso || 'Alvo'}: ${daysRemaining} dias restantes`}
         >
-          <div style={{ fontSize: '1.15rem', fontWeight: 900, lineHeight: 1 }}>
+          <div style={{ fontSize: '1.2rem', fontWeight: 900, lineHeight: 1, color: '#ffffff', textShadow: '0 1px 2px rgba(0,0,0,0.3)' }}>
             {daysRemaining > 0 ? daysRemaining : 0}
           </div>
-          <div style={{ fontSize: '0.6rem', opacity: 0.85, textTransform: 'uppercase', fontWeight: 700 }}>
+          <div style={{ fontSize: '0.65rem', color: '#fee2e2', textTransform: 'uppercase', fontWeight: 800, letterSpacing: '0.5px' }}>
             dias
           </div>
         </div>

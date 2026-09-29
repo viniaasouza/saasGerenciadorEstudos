@@ -101,7 +101,21 @@ const initializeMockUsers = (): AppUser[] => {
 // Initial seed feedbacks
 const initializeFeedbacks = (): FeedbackItem[] => {
   const existing = safeJsonParse<FeedbackItem[]>(localStorage.getItem(KEYS.FEEDBACKS), []);
-  if (existing.length > 0) return existing;
+  if (existing.length > 0) {
+    let changed = false;
+    const updated = existing.map((f) => {
+      if (f.id === 'fb-sample-2' && f.status !== 'resolvido') {
+        changed = true;
+        return { ...f, status: 'resolvido' as const };
+      }
+      return f;
+    });
+    if (changed) {
+      localStorage.setItem(KEYS.FEEDBACKS, JSON.stringify(updated));
+      return updated;
+    }
+    return existing;
+  }
 
   const initialFeedbacks: FeedbackItem[] = [
     {
@@ -123,7 +137,7 @@ const initializeFeedbacks = (): FeedbackItem[] => {
       type: 'bug',
       title: 'Pequena inconsistência de cores no modo escuro',
       description: 'Em telas menores, o badge de dias restantes estava com contraste baixo no modo escuro.',
-      status: 'em_analise',
+      status: 'resolvido',
       createdAt: new Date(Date.now() - 86400000).toISOString(),
     },
   ];

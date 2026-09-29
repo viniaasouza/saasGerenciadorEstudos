@@ -361,6 +361,52 @@ input, textarea, select {
   color: var(--text-title);
 }
 
+/* Header Countdown Badge with High Contrast */
+.header-countdown-badge {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.28);
+  border-left: 3px solid #dc2626 !important;
+  transition: all 0.2s ease;
+}
+
+.header-countdown-badge .badge-icon {
+  color: #dc2626;
+}
+
+.header-countdown-badge .badge-title {
+  color: #7f1d1d;
+  font-weight: 700;
+}
+
+.header-countdown-badge .badge-value {
+  color: #b91c1c;
+  font-weight: 900;
+}
+
+/* Dark mode: crisp, luminous, high-contrast red/coral */
+.dark .header-countdown-badge {
+  background: rgba(239, 68, 68, 0.18) !important;
+  border: 1px solid rgba(248, 113, 113, 0.45) !important;
+  border-left: 3px solid #f87171 !important;
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.22);
+}
+
+.dark .header-countdown-badge .badge-icon {
+  color: #f87171 !important;
+}
+
+.dark .header-countdown-badge .badge-title {
+  color: #cbd5e1 !important;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.dark .header-countdown-badge .badge-value {
+  color: #fca5a5 !important;
+  font-weight: 900 !important;
+  text-shadow: 0 0 10px rgba(248, 113, 113, 0.45);
+}
+
 .theme-toggle {
   width: 2.5rem;
   height: 2.5rem;
@@ -1020,9 +1066,23 @@ input, textarea, select {
     font-size: 1.2rem !important;
   }
 
-  .header-subtitle,
-  .header-countdown-badge {
+  .header-subtitle {
     display: none !important;
+  }
+
+  .header-countdown-badge {
+    display: flex !important;
+    padding: 0.35rem 0.65rem !important;
+    gap: 0.45rem !important;
+  }
+
+  .header-countdown-badge .badge-title {
+    display: none !important;
+  }
+
+  .header-countdown-badge .badge-value {
+    font-size: 0.82rem !important;
+    font-weight: 800 !important;
   }
 
   .header-actions {

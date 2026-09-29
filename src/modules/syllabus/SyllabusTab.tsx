@@ -76,7 +76,14 @@ export const SyllabusTab: React.FC<SyllabusTabProps> = ({ activeWorkspaceId, onS
     }
     const info = db.getConcursoInfo(activeWorkspaceId);
     if (info?.banca) {
-      const match = info.banca.includes('FCC') ? 'FCC' : info.banca.split(' ')[0];
+      const upper = info.banca.toUpperCase();
+      const match = upper.includes('FCC')
+        ? 'FCC'
+        : (upper.includes('CEBRASPE') || upper.includes('CESPE'))
+        ? 'Cebraspe'
+        : upper.includes('FGV')
+        ? 'FGV'
+        : info.banca.split(' ')[0];
       setBancaName(match);
     }
   }, [activeWorkspaceId]);
@@ -413,17 +420,77 @@ export const SyllabusTab: React.FC<SyllabusTabProps> = ({ activeWorkspaceId, onS
             <span>Importar com IA</span>
           </button>
 
-          {/* GRAN QUESTÕES BANCA TOGGLE */}
-          <div className="gran-options" style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--card-bg, #ffffff)', padding: '8px 14px', borderRadius: '10px', border: '1px solid var(--border-color, #e2e8f0)' }}>
-            <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>Gran Questões:</span>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', cursor: 'pointer' }}>
-              <input 
-                type="checkbox" 
-                checked={filterBanca} 
-                onChange={(e) => setFilterBanca(e.target.checked)} 
-              />
-              Filtrar por <strong>{bancaName}</strong>
-            </label>
+          {/* GRAN QUESTÕES BANCA QUICK FILTER */}
+          <div
+            className="gran-options"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              backgroundColor: 'var(--bg-element)',
+              padding: '6px 12px',
+              borderRadius: '10px',
+              border: '1px solid var(--border-color)',
+              flexWrap: 'wrap',
+            }}
+          >
+            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-title)', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+              🎯 Questões:
+            </span>
+
+            <div style={{ display: 'inline-flex', gap: '3px', backgroundColor: 'var(--bg-card)', padding: '2px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+              {(['FCC', 'Cebraspe', 'FGV', 'Vunesp'] as const).map((b) => {
+                const isActive = filterBanca && bancaName.toUpperCase() === b.toUpperCase();
+                return (
+                  <button
+                    key={b}
+                    type="button"
+                    onClick={() => {
+                      setBancaName(b);
+                      setFilterBanca(true);
+                    }}
+                    style={{
+                      padding: '3px 8px',
+                      borderRadius: '6px',
+                      fontSize: '0.75rem',
+                      fontWeight: isActive ? 800 : 600,
+                      backgroundColor: isActive ? 'var(--color-primary)' : 'transparent',
+                      color: isActive ? '#ffffff' : 'var(--text-muted)',
+                      border: 'none',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                    }}
+                    title={`Filtrar questões cirúrgicas da banca ${b}`}
+                  >
+                    {b}
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => setFilterBanca(!filterBanca)}
+                style={{
+                  padding: '3px 8px',
+                  borderRadius: '6px',
+                  fontSize: '0.75rem',
+                  fontWeight: !filterBanca ? 800 : 500,
+                  backgroundColor: !filterBanca ? 'var(--color-secondary)' : 'transparent',
+                  color: !filterBanca ? '#ffffff' : 'var(--text-muted)',
+                  border: 'none',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+                title="Pesquisar sem filtro de banca (Geral)"
+              >
+                Todas
+              </button>
+            </div>
+
+            {filterBanca && (
+              <span style={{ fontSize: '0.75rem', color: 'var(--color-success)', fontWeight: 700 }}>
+                ✓ {bancaName} ativa
+              </span>
+            )}
           </div>
         </div>
       </div>

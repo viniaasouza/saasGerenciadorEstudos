@@ -19,13 +19,15 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId, o
   const [flashcardInitialData, setFlashcardInitialData] = useState<Partial<Flashcard> | null>(null);
   const [flashcardSuccessMsg, setFlashcardSuccessMsg] = useState<string | null>(null);
   const [onlyErrorsFilter, setOnlyErrorsFilter] = useState(false);
+  const [bancaFilter, setBancaFilter] = useState<'todas' | 'FCC' | 'Cebraspe' | 'FGV' | 'outras'>('todas');
+  const [consistencyBanca, setConsistencyBanca] = useState<'FCC' | 'Cebraspe'>('FCC');
 
   // Manual Form states
   const [subjectId, setSubjectId] = useState('');
   const [topicName, setTopicName] = useState('');
   const [attempted, setAttempted] = useState<number | ''>('');
   const [correct, setCorrect] = useState<number | ''>('');
-  const [banca, setBanca] = useState('FGV');
+  const [banca, setBanca] = useState('FCC');
   const [tipo, setTipo] = useState<'treino' | 'simulado'>('treino');
   const [adicionarParaRevisao, setAdicionarParaRevisao] = useState(false);
   const [insightAncoragem, setInsightAncoragem] = useState('');
@@ -44,7 +46,7 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId, o
     isNewSubject: boolean;
   } | null>(null);
 
-  const bancas = ['FGV', 'Cebraspe', 'FCC', 'Vunesp', 'Cesgranrio', 'Outra'];
+  const bancas = ['FCC', 'Cebraspe', 'FGV', 'Vunesp', 'Cesgranrio', 'Outra'];
 
   useEffect(() => {
     if (!activeWorkspaceId) return;
@@ -296,12 +298,26 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId, o
     setTimeout(() => setFlashcardSuccessMsg(null), 4000);
   };
 
-  // Filter history list to only show questions of active workspace
+  // Filter history list to only show questions of active workspace & active banca
   const activeWorkspaceQuestions = questions.filter(q => q.workspaceId === activeWorkspaceId);
-  const errorQuestionsCount = activeWorkspaceQuestions.filter(q => q.adicionarParaRevisao || q.correct < q.attempted).length;
+  
+  const matchesBancaFilter = (qBanca: string = '', filter: string) => {
+    if (filter === 'todas') return true;
+    const b = qBanca.toUpperCase();
+    if (filter === 'FCC') return b.includes('FCC');
+    if (filter === 'Cebraspe') return b.includes('CEBRASPE') || b.includes('CESPE');
+    if (filter === 'FGV') return b.includes('FGV');
+    if (filter === 'outras') {
+      return !b.includes('FCC') && !b.includes('CEBRASPE') && !b.includes('CESPE') && !b.includes('FGV');
+    }
+    return true;
+  };
+
+  const bancaFilteredQuestions = activeWorkspaceQuestions.filter(q => matchesBancaFilter(q.banca, bancaFilter));
+  const errorQuestionsCount = bancaFilteredQuestions.filter(q => q.adicionarParaRevisao || q.correct < q.attempted).length;
   const displayedQuestions = onlyErrorsFilter
-    ? activeWorkspaceQuestions.filter(q => q.adicionarParaRevisao || q.correct < q.attempted)
-    : activeWorkspaceQuestions;
+    ? bancaFilteredQuestions.filter(q => q.adicionarParaRevisao || q.correct < q.attempted)
+    : bancaFilteredQuestions;
 
   // Metrics calculation
   const totalAttempted = activeWorkspaceQuestions.reduce((sum, q) => sum + q.attempted, 0);
@@ -376,9 +392,36 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId, o
 
       {/* Progress tracker for mock exams (Simulados por Matéria) */}
       <div className="placeholder-card card-primary" style={{ padding: '1.5rem', marginBottom: '1rem', minHeight: 'auto' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}>
-          <CheckCircle size={20} style={{ color: 'var(--color-success)' }} />
-          <h3>Simulados por Matéria (Progresso de Consistência)</h3>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <CheckCircle size={20} style={{ color: 'var(--color-success)' }} />
+            <h3>Simulados por Matéria (Progresso de Consistência)</h3>
+          </div>
+
+          {/* Quick banca toggle for consistency practice */}
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--bg-element)', padding: '3px 8px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>Banca do Gran:</span>
+            {(['FCC', 'Cebraspe'] as const).map((b) => (
+              <button
+                key={b}
+                type="button"
+                onClick={() => setConsistencyBanca(b)}
+                style={{
+                  padding: '3px 8px',
+                  borderRadius: '5px',
+                  fontSize: '0.72rem',
+                  fontWeight: consistencyBanca === b ? 800 : 600,
+                  backgroundColor: consistencyBanca === b ? 'var(--color-primary)' : 'transparent',
+                  color: consistencyBanca === b ? '#ffffff' : 'var(--text-muted)',
+                  border: 'none',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                }}
+              >
+                {b}
+              </button>
+            ))}
+          </div>
         </div>
         <p className="card-notes" style={{ marginBottom: '1rem' }}>
           Realize 3 simulados com taxa de acerto $\ge 85\%$ para promover a matéria ao modo de manutenção e liberar novas disciplinas do backlog.
@@ -440,7 +483,7 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId, o
                     assuntoId: stat.assuntoId,
                     disciplinaId: stat.disciplinaId,
                     query: stat.granQuery || stat.name,
-                    banca: 'FCC',
+                    banca: consistencyBanca,
                     filterBanca: true
                   })}
                   target="_blank"
@@ -450,18 +493,20 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId, o
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: '4px',
-                    padding: '4px',
-                    borderRadius: '4px',
-                    fontSize: '0.7rem',
+                    padding: '5px 8px',
+                    borderRadius: '6px',
+                    fontSize: '0.72rem',
                     fontWeight: 700,
-                    color: '#c8102e',
-                    background: 'rgba(200, 16, 46, 0.08)',
+                    color: 'var(--color-primary)',
+                    backgroundColor: 'var(--color-primary-glow)',
+                    border: '1px solid rgba(99, 102, 241, 0.25)',
                     textDecoration: 'none',
-                    marginTop: '2px'
+                    marginTop: '2px',
+                    transition: 'all 0.15s ease'
                   }}
-                  title="Abrir questões no Gran Questões (Filtro Inteligente)"
+                  title={`Abrir questões no Gran Questões filtradas por ${consistencyBanca}`}
                 >
-                  <span>🎯 Praticar no Gran</span>
+                  <span>🎯 Praticar {consistencyBanca}</span>
                   <ExternalLink size={10} />
                 </a>
               </div>
@@ -746,43 +791,89 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId, o
 
           {/* Right: History List */}
           <div className="placeholder-card card-secondary">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-              <h3>Histórico de Questões</h3>
-              <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--bg-element)', padding: '3px', borderRadius: '6px' }}>
-                <button
-                  type="button"
-                  onClick={() => setOnlyErrorsFilter(false)}
-                  style={{
-                    padding: '4px 10px',
-                    borderRadius: '4px',
-                    fontSize: '0.75rem',
-                    fontWeight: !onlyErrorsFilter ? 700 : 500,
-                    backgroundColor: !onlyErrorsFilter ? 'var(--bg-card)' : 'transparent',
-                    color: !onlyErrorsFilter ? 'var(--color-primary)' : 'var(--text-muted)',
-                  }}
-                >
-                  Todas ({activeWorkspaceQuestions.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setOnlyErrorsFilter(true)}
-                  style={{
-                    padding: '4px 10px',
-                    borderRadius: '4px',
-                    fontSize: '0.75rem',
-                    fontWeight: onlyErrorsFilter ? 700 : 500,
-                    backgroundColor: onlyErrorsFilter ? 'var(--bg-card)' : 'transparent',
-                    color: onlyErrorsFilter ? 'var(--color-danger)' : 'var(--text-muted)',
-                  }}
-                >
-                  ⚡ Caderno de Erros ({errorQuestionsCount})
-                </button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem', flexWrap: 'wrap', gap: '0.65rem' }}>
+              <div>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 800 }}>Histórico de Questões</h3>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  {bancaFilter !== 'todas' ? `Filtrando por banca: ${bancaFilter}` : 'Todas as bancas do ciclo'}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+                {/* Quick Banca Filter Pills */}
+                <div style={{ display: 'inline-flex', gap: '2px', backgroundColor: 'var(--bg-element)', padding: '3px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                  {(['todas', 'FCC', 'Cebraspe', 'FGV', 'outras'] as const).map((b) => {
+                    const isSelected = bancaFilter === b;
+                    return (
+                      <button
+                        key={b}
+                        type="button"
+                        onClick={() => setBancaFilter(b)}
+                        style={{
+                          padding: '3px 8px',
+                          borderRadius: '5px',
+                          fontSize: '0.72rem',
+                          fontWeight: isSelected ? 800 : 500,
+                          backgroundColor: isSelected ? 'var(--color-primary)' : 'transparent',
+                          color: isSelected ? '#ffffff' : 'var(--text-muted)',
+                          border: 'none',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        {b === 'todas' ? 'Todas' : b === 'outras' ? 'Outras' : b}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Errors vs All */}
+                <div style={{ display: 'inline-flex', gap: '2px', backgroundColor: 'var(--bg-element)', padding: '3px', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
+                  <button
+                    type="button"
+                    onClick={() => setOnlyErrorsFilter(false)}
+                    style={{
+                      padding: '3px 9px',
+                      borderRadius: '5px',
+                      fontSize: '0.72rem',
+                      fontWeight: !onlyErrorsFilter ? 800 : 500,
+                      backgroundColor: !onlyErrorsFilter ? 'var(--bg-card)' : 'transparent',
+                      color: !onlyErrorsFilter ? 'var(--color-primary)' : 'var(--text-muted)',
+                      border: 'none',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    Total ({bancaFilteredQuestions.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOnlyErrorsFilter(true)}
+                    style={{
+                      padding: '3px 9px',
+                      borderRadius: '5px',
+                      fontSize: '0.72rem',
+                      fontWeight: onlyErrorsFilter ? 800 : 500,
+                      backgroundColor: onlyErrorsFilter ? 'var(--bg-card)' : 'transparent',
+                      color: onlyErrorsFilter ? 'var(--color-danger)' : 'var(--text-muted)',
+                      border: 'none',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    ⚡ Caderno de Erros ({errorQuestionsCount})
+                  </button>
+                </div>
               </div>
             </div>
 
             {displayedQuestions.length === 0 ? (
               <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>
-                {onlyErrorsFilter ? 'Nenhum erro registrado neste ciclo! Parabéns!' : 'Nenhuma questão registrada recentemente para este ciclo.'}
+                {bancaFilter !== 'todas'
+                  ? `Nenhuma questão registrada para a banca ${bancaFilter}. Altere o filtro acima para ver outras questões.`
+                  : onlyErrorsFilter
+                  ? 'Nenhum erro registrado neste ciclo! Parabéns!'
+                  : 'Nenhuma questão registrada recentemente para este ciclo.'}
               </p>
             ) : (
               <div style={{ overflowX: 'auto', width: '100%' }}>

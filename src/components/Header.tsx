@@ -218,11 +218,11 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Countdown Badge */}
         {hasConfiguredExam && concursoInfo && (
-          <div className="cycle-badge header-countdown-badge" style={{ borderLeft: '3px solid #c8102e' }}>
-            <Calendar className="badge-icon" style={{ color: '#c8102e' }} />
+          <div className="cycle-badge header-countdown-badge" title={`Prova ${concursoInfo.concurso}: ${daysRemaining > 0 ? `${daysRemaining} dias restantes` : 'Hoje!'}`}>
+            <Calendar className="badge-icon" />
             <div className="badge-content">
               <span className="badge-title">Prova {concursoInfo.concurso}</span>
-              <span className="badge-value" style={{ color: '#c8102e' }}>
+              <span className="badge-value">
                 {daysRemaining > 0 ? `${daysRemaining} dias` : 'Hoje!'}
               </span>
             </div>
