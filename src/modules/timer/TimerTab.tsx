@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { db } from '../../db/database';
 import type { Subject, StudySession, StudyType, SpacedReview, QuestionSession, RunningTimerState } from '../../types';
 import { buildGranQuestoesUrl } from '../../data/tceGoPreset';
@@ -71,6 +71,7 @@ export const TimerTab: React.FC<TimerTabProps> = ({
   const [manualNotes, setManualNotes] = useState('');
   const [manualScheduledIntervals, setManualScheduledIntervals] = useState<number[]>([7]);
   const [manualSuccessMsg, setManualSuccessMsg] = useState<string | null>(null);
+  const [showManualConfirmModal, setShowManualConfirmModal] = useState(false);
 
   // Gran Tracker states for Manual Entry
   const [manualPlaybackSpeed, setManualPlaybackSpeed] = useState<number>(1.0);
@@ -522,8 +523,8 @@ export const TimerTab: React.FC<TimerTabProps> = ({
     onSessionSaved();
   };
 
-  // 5. Manual Study Logging Form Submission
-  const handleSaveManualStudy = (e: React.FormEvent) => {
+  // 5. Manual Study Logging: Step 1 - Validate inputs and request confirmation modal
+  const handleRequestSaveManualStudy = (e: React.FormEvent) => {
     e.preventDefault();
 
     const h = typeof manualHours === 'number' ? manualHours : 0;
@@ -540,6 +541,21 @@ export const TimerTab: React.FC<TimerTabProps> = ({
       alert('Por favor, selecione uma disciplina.');
       return;
     }
+
+    // Open confirmation modal
+    setShowManualConfirmModal(true);
+  };
+
+  // Step 2: Execute actual manual save after user confirms
+  const executeSaveManualStudy = useCallback(() => {
+    const h = typeof manualHours === 'number' ? manualHours : 0;
+    const m = typeof manualMinutes === 'number' ? manualMinutes : 0;
+    const totalSecs = (h * 3600) + (m * 60);
+
+    if (totalSecs <= 0) return;
+
+    const sub = subjects.find(s => s.id === manualSubjectId);
+    if (!sub) return;
 
     const top = sub.topics.find(t => t.id === manualTopicId);
     const subtop = top?.subtopics.find(st => st.id === manualSubtopicId);
@@ -671,7 +687,7 @@ export const TimerTab: React.FC<TimerTabProps> = ({
       setSubjects(updatedSubjects);
     }
 
-    // Show confirmation
+    // Show confirmation bubble
     const formattedHours = `${h > 0 ? `${h}h ` : ''}${m}min`;
     const extraInfo = isVideoStudy && manualPlaybackSpeed > 1.0 
       ? ` (equivale a ${((totalSecs * manualPlaybackSpeed) / 3600).toFixed(1)}h de videoaula a ${manualPlaybackSpeed}x)`
@@ -679,6 +695,9 @@ export const TimerTab: React.FC<TimerTabProps> = ({
     const topicInfo = top ? ` • Tópico: ${top.name}` : '';
     setManualSuccessMsg(`${formattedHours}${extraInfo} de estudo em "${sub.name}"${topicInfo} registrados com sucesso!`);
     setTimeout(() => setManualSuccessMsg(null), 6000);
+
+    // Close confirmation modal
+    setShowManualConfirmModal(false);
 
     // Reset manual form fields
     setManualHours('');
@@ -695,7 +714,45 @@ export const TimerTab: React.FC<TimerTabProps> = ({
     setTimeout(() => {
       manualSubmitContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }, 50);
-  };
+  }, [
+    manualHours,
+    manualMinutes,
+    manualSubjectId,
+    manualTopicId,
+    manualSubtopicId,
+    manualDate,
+    manualStudyType,
+    manualPlaybackSpeed,
+    manualNotes,
+    manualAcertos,
+    manualErros,
+    manualVideoLesson,
+    manualVideoBlock,
+    manualPdfLesson,
+    manualPdfPages,
+    manualScheduledIntervals,
+    manualMarkCompleted,
+    manualMarkVideoWatched,
+    manualMarkPdfRead,
+    subjects,
+    activeWorkspaceId,
+    onSessionSaved,
+  ]);
+
+  // Handle keyboard shortcuts (Enter to confirm, Escape to cancel) when confirmation modal is active
+  useEffect(() => {
+    if (!showManualConfirmModal) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowManualConfirmModal(false);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        executeSaveManualStudy();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showManualConfirmModal, executeSaveManualStudy]);
 
   // Format seconds to HH:MM:SS
   const formatTime = (totalSeconds: number) => {
@@ -1121,7 +1178,7 @@ export const TimerTab: React.FC<TimerTabProps> = ({
       {/* MODE 2: MANUAL STUDY ENTRY FORM */}
       {/* ───────────────────────────────────────────────────────────── */}
       {activeMode === 'manual' && (
-        <form onSubmit={handleSaveManualStudy} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', maxWidth: '800px', margin: '0 auto', width: '100%' }}>
+        <form onSubmit={handleRequestSaveManualStudy} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', maxWidth: '800px', margin: '0 auto', width: '100%' }}>
 
           <div style={{
             background: 'var(--card-bg, #ffffff)',
@@ -1847,6 +1904,240 @@ export const TimerTab: React.FC<TimerTabProps> = ({
           </div>
         </div>
       )}
+
+      {/* CONFIRMATION MODAL FOR MANUAL STUDY ENTRY */}
+      {showManualConfirmModal && (() => {
+        const sub = subjects.find((s) => s.id === manualSubjectId);
+        const top = sub?.topics.find((t) => t.id === manualTopicId);
+        const subtop = top?.subtopics.find((st) => st.id === manualSubtopicId);
+        const h = typeof manualHours === 'number' ? manualHours : 0;
+        const m = typeof manualMinutes === 'number' ? manualMinutes : 0;
+        const totalSecs = (h * 3600) + (m * 60);
+        const isVideoStudy = manualStudyType === 'videoaula' || manualStudyType === 'teoria';
+        const isPdfStudy = manualStudyType === 'pdf';
+        const ac = typeof manualAcertos === 'number' ? manualAcertos : 0;
+        const er = typeof manualErros === 'number' ? manualErros : 0;
+        const totalQ = ac + er;
+        const formattedDate = manualDate ? manualDate.split('-').reverse().join('/') : new Date().toLocaleDateString('pt-BR');
+
+        return (
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.65)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 9999,
+              backdropFilter: 'blur(4px)',
+              padding: '1rem',
+              animation: 'fadeInTab 0.15s ease-out'
+            }}
+            onClick={() => setShowManualConfirmModal(false)}
+          >
+            <div
+              style={{
+                backgroundColor: 'var(--bg-card, #ffffff)',
+                border: '1.5px solid var(--border-color, #e2e8f0)',
+                borderRadius: '20px',
+                padding: '24px',
+                maxWidth: '520px',
+                width: '100%',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '18px'
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{
+                    width: '42px',
+                    height: '42px',
+                    borderRadius: '12px',
+                    backgroundColor: 'rgba(34, 197, 94, 0.12)',
+                    color: '#22c55e',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0
+                  }}>
+                    <CheckCircle2 size={24} />
+                  </div>
+                  <div>
+                    <h3 style={{ fontSize: '1.15rem', fontWeight: 800, margin: 0, color: 'var(--text-title)' }}>
+                      Confirmar Estudo Manual
+                    </h3>
+                    <p style={{ fontSize: '0.82rem', margin: '2px 0 0 0', opacity: 0.75 }}>
+                      Verifique os detalhes antes de registrar no seu ciclo de estudos:
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowManualConfirmModal(false)}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--text-muted)',
+                    cursor: 'pointer',
+                    padding: '4px',
+                    borderRadius: '6px'
+                  }}
+                  title="Fechar (Esc)"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {/* Summary Card */}
+              <div style={{
+                backgroundColor: 'var(--bg-element, #f8fafc)',
+                border: '1px solid var(--border-color, #e2e8f0)',
+                borderRadius: '14px',
+                padding: '16px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+                fontSize: '0.9rem'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>
+                  <span style={{ opacity: 0.7, fontSize: '0.82rem', fontWeight: 600 }}>DISCIPLINA</span>
+                  <span style={{ fontWeight: 800, color: '#3b82f6', textAlign: 'right' }}>{sub?.name || 'Não selecionada'}</span>
+                </div>
+
+                {(top || subtop) && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', gap: '10px' }}>
+                    <span style={{ opacity: 0.7, fontSize: '0.82rem', fontWeight: 600, flexShrink: 0 }}>TÓPICO</span>
+                    <span style={{ fontWeight: 600, textAlign: 'right', wordBreak: 'break-word' }}>
+                      {subtop ? subtop.name : top?.name}
+                    </span>
+                  </div>
+                )}
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>
+                  <div>
+                    <span style={{ opacity: 0.7, fontSize: '0.78rem', fontWeight: 600, display: 'block' }}>TEMPO LÍQUIDO</span>
+                    <span style={{ fontWeight: 800, color: '#22c55e', fontSize: '1.05rem' }}>
+                      {h > 0 ? `${h}h ` : ''}{m}min
+                    </span>
+                    {isVideoStudy && manualPlaybackSpeed > 1 && (
+                      <span style={{ display: 'block', fontSize: '0.72rem', opacity: 0.75 }}>
+                        ({((totalSecs * manualPlaybackSpeed) / 3600).toFixed(1)}h a {manualPlaybackSpeed}x)
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <span style={{ opacity: 0.7, fontSize: '0.78rem', fontWeight: 600, display: 'block' }}>DATA</span>
+                    <span style={{ fontWeight: 700 }}>{formattedDate}</span>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div>
+                    <span style={{ opacity: 0.7, fontSize: '0.78rem', fontWeight: 600, display: 'block' }}>MODALIDADE</span>
+                    <span style={{ fontWeight: 700, textTransform: 'capitalize' }}>{manualStudyType}</span>
+                  </div>
+                  {totalQ > 0 ? (
+                    <div>
+                      <span style={{ opacity: 0.7, fontSize: '0.78rem', fontWeight: 600, display: 'block' }}>QUESTÕES</span>
+                      <span style={{ fontWeight: 700, color: ac > 0 ? '#16a34a' : 'inherit' }}>
+                        {ac} acertos / {er} erros ({Math.round((ac / totalQ) * 100)}%)
+                      </span>
+                    </div>
+                  ) : (
+                    <div>
+                      <span style={{ opacity: 0.7, fontSize: '0.78rem', fontWeight: 600, display: 'block' }}>REVISÕES</span>
+                      <span style={{ fontWeight: 600, fontSize: '0.8rem' }}>
+                        {manualScheduledIntervals.length > 0 ? manualScheduledIntervals.map(d => `${d}d`).join(', ') : 'Nenhuma'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {isVideoStudy && (manualVideoLesson.trim() || manualVideoBlock.trim()) && (
+                  <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '8px' }}>
+                    <span style={{ opacity: 0.7, fontSize: '0.78rem', fontWeight: 600, display: 'block' }}>VIDEOAULA</span>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>
+                      {[manualVideoLesson.trim(), manualVideoBlock.trim()].filter(Boolean).join(' • ')}
+                    </span>
+                  </div>
+                )}
+
+                {isPdfStudy && (manualPdfLesson.trim() || manualPdfPages.trim()) && (
+                  <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '8px' }}>
+                    <span style={{ opacity: 0.7, fontSize: '0.78rem', fontWeight: 600, display: 'block' }}>AULA PDF</span>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>
+                      {[manualPdfLesson.trim(), manualPdfPages.trim()].filter(Boolean).join(' • ')}
+                    </span>
+                  </div>
+                )}
+
+                {manualNotes.trim() && (
+                  <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '8px' }}>
+                    <span style={{ opacity: 0.7, fontSize: '0.78rem', fontWeight: 600, display: 'block' }}>ANOTAÇÃO</span>
+                    <span style={{ fontSize: '0.82rem', fontStyle: 'italic', opacity: 0.85 }}>"{manualNotes.trim()}"</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div style={{ display: 'flex', gap: '12px', marginTop: '4px' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowManualConfirmModal(false)}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    borderRadius: '10px',
+                    border: '1px solid var(--border-color)',
+                    background: 'transparent',
+                    color: 'var(--text-main)',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  Voltar / Corrigir
+                  <span style={{ fontSize: '0.7rem', opacity: 0.6, background: 'var(--bg-element)', padding: '2px 5px', borderRadius: '4px', border: '1px solid var(--border-color)' }}>Esc</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={executeSaveManualStudy}
+                  style={{
+                    flex: 1.2,
+                    padding: '12px',
+                    borderRadius: '10px',
+                    border: 'none',
+                    background: '#22c55e',
+                    color: '#ffffff',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    boxShadow: '0 4px 12px rgba(34, 197, 94, 0.35)'
+                  }}
+                >
+                  <Save size={18} />
+                  Confirmar e Salvar
+                  <span style={{ fontSize: '0.7rem', background: 'rgba(255, 255, 255, 0.25)', padding: '2px 6px', borderRadius: '4px' }}>Enter ↵</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };
