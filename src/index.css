@@ -108,6 +108,38 @@ input, textarea, select {
 }
 
 /* ==========================================
+   CUSTOM MODERN SCROLLBARS (SYSTEM-WIDE)
+   ========================================== */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.28);
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.55);
+}
+
+/* Hide scrollbar completely on WorkspaceTabBar */
+.workspace-tab-bar {
+  scrollbar-width: none !important; /* Firefox */
+  -ms-overflow-style: none !important; /* IE/Edge */
+}
+
+.workspace-tab-bar::-webkit-scrollbar {
+  display: none !important; /* Chrome, Safari, Edge */
+}
+
+
+/* ==========================================
    LAYOUT STRUCTURE
    ========================================== */
 .app-layout {
