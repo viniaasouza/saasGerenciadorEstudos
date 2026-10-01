@@ -1523,27 +1523,29 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
       )}
 
       {/* FLASHCARD REVIEW MODAL */}
-      <FlashcardReviewModal
-        isOpen={isReviewModalOpen}
-        cards={dueFlashcards.length > 0 ? dueFlashcards : flashcards}
-        onSaveCard={(card) => {
-          const updated = flashcards.map((c) => (c.id === card.id ? card : c));
-          db.saveFlashcards(activeWorkspaceId, updated);
-          setFlashcards(updated);
-          const nextCount = reviewedFlashcardsToday + 1;
-          setReviewedFlashcardsToday(nextCount);
-          if (activeWorkspaceId) {
-            const key = `concurso_estudos_fc_reviewed_${activeWorkspaceId}_${getLocalDateString()}`;
-            localStorage.setItem(key, String(nextCount));
-          }
-          triggerXpAward('flashcard_reviewed', XP_CONFIG.FLASHCARD_REVIEWED, 'Flashcard revisado (SM-2)');
-        }}
-        onClose={() => {
-          setIsReviewModalOpen(false);
-          loadWorkspaceData();
-          if (onRefreshStats) onRefreshStats();
-        }}
-      />
+      {isReviewModalOpen && (
+        <FlashcardReviewModal
+          isOpen={isReviewModalOpen}
+          cards={dueFlashcards.length > 0 ? dueFlashcards : flashcards}
+          onSaveCard={(card) => {
+            const updated = flashcards.map((c) => (c.id === card.id ? card : c));
+            db.saveFlashcards(activeWorkspaceId, updated);
+            setFlashcards(updated);
+            const nextCount = reviewedFlashcardsToday + 1;
+            setReviewedFlashcardsToday(nextCount);
+            if (activeWorkspaceId) {
+              const key = `concurso_estudos_fc_reviewed_${activeWorkspaceId}_${getLocalDateString()}`;
+              localStorage.setItem(key, String(nextCount));
+            }
+            triggerXpAward('flashcard_reviewed', XP_CONFIG.FLASHCARD_REVIEWED, 'Flashcard revisado (SM-2)');
+          }}
+          onClose={() => {
+            setIsReviewModalOpen(false);
+            loadWorkspaceData();
+            if (onRefreshStats) onRefreshStats();
+          }}
+        />
+      )}
 
       {/* PREFERENCES MODAL */}
       {isSettingsModalOpen && (

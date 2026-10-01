@@ -1118,15 +1118,17 @@ export const FlashcardsTab: React.FC<FlashcardsTabProps> = ({ activeWorkspaceId 
       />
 
       {/* Review Modal (Anki SM-2 Engine) */}
-      <FlashcardReviewModal
-        isOpen={isReviewModalOpen}
-        cards={reviewQueue}
-        onSaveCard={handleSaveCard}
-        onClose={() => {
-          setIsReviewModalOpen(false);
-          setReviewQueue([]);
-        }}
-      />
+      {isReviewModalOpen && (
+        <FlashcardReviewModal
+          isOpen={isReviewModalOpen}
+          cards={reviewQueue}
+          onSaveCard={handleSaveCard}
+          onClose={() => {
+            setIsReviewModalOpen(false);
+            setReviewQueue([]);
+          }}
+        />
+      )}
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { X, CheckCircle2, Trophy } from 'lucide-react';
 import type { Flashcard } from '../../types';
 import { FormattedText } from './FormattedText';
@@ -17,31 +17,39 @@ export const FlashcardReviewModal: React.FC<FlashcardReviewModalProps> = ({
   onSaveCard,
   onClose,
 }) => {
-  const [sessionCards, setSessionCards] = useState<Flashcard[]>([]);
+  const [prevOpen, setPrevOpen] = useState(isOpen);
+  const [sessionCards, setSessionCards] = useState<Flashcard[]>(() => (isOpen && cards ? cards : []));
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isAnswerRevealed, setIsAnswerRevealed] = useState(false);
-  const [isFinished, setIsFinished] = useState(false);
+  const [isFinished, setIsFinished] = useState(() => (isOpen && cards ? cards.length === 0 : false));
   const [stats, setStats] = useState({
     again: 0,
     hard: 0,
     good: 0,
     easy: 0,
   });
-  const prevIsOpenRef = useRef(false);
 
-  // Initialize session only on initial modal open to avoid resetting progress on parent re-renders
+  // Synchronously reset/initialize session on modal open transition
+  if (isOpen && !prevOpen) {
+    setPrevOpen(true);
+    setSessionCards(cards || []);
+    setCurrentIndex(0);
+    setIsAnswerRevealed(false);
+    setIsFinished(!cards || cards.length === 0);
+    setStats({ again: 0, hard: 0, good: 0, easy: 0 });
+  } else if (!isOpen && prevOpen) {
+    setPrevOpen(false);
+  }
+
+  // Backup sync if cards prop updates while modal is open with an empty session
   useEffect(() => {
-    if (isOpen && !prevIsOpenRef.current) {
+    if (isOpen && sessionCards.length === 0 && cards && cards.length > 0) {
       setSessionCards(cards);
-      setCurrentIndex(0);
-      setIsAnswerRevealed(false);
-      setIsFinished(cards.length === 0);
-      setStats({ again: 0, hard: 0, good: 0, easy: 0 });
+      setIsFinished(false);
     }
-    prevIsOpenRef.current = isOpen;
-  }, [isOpen, cards]);
+  }, [isOpen, cards, sessionCards.length]);
 
-  const currentCard = sessionCards[currentIndex];
+  const currentCard: Flashcard | undefined = sessionCards[currentIndex];
 
   const handleRate = useCallback(
     (rating: ReviewRating) => {
@@ -90,7 +98,7 @@ export const FlashcardReviewModal: React.FC<FlashcardReviewModalProps> = ({
         return;
       }
 
-      if (isFinished) {
+      if (isFinished || !currentCard) {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           onClose();
@@ -123,13 +131,14 @@ export const FlashcardReviewModal: React.FC<FlashcardReviewModalProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, isAnswerRevealed, isFinished, handleRate, onClose]);
+  }, [isOpen, isAnswerRevealed, isFinished, currentCard, handleRate, onClose]);
 
   if (!isOpen) return null;
 
   const totalCards = sessionCards.length;
   const progressPercent = totalCards > 0 ? (currentIndex / totalCards) * 100 : 100;
   const previews = currentCard ? getIntervalPreviews(currentCard) : null;
+  const isSessionDone = isFinished || !currentCard || totalCards === 0;
 
   return (
     <div
@@ -188,7 +197,7 @@ export const FlashcardReviewModal: React.FC<FlashcardReviewModalProps> = ({
                 </span>
               )}
             </div>
-            {!isFinished && totalCards > 0 && (
+            {!isSessionDone && totalCards > 0 && (
               <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '4px' }}>
                 Card <strong>{currentIndex + 1}</strong> de <strong>{totalCards}</strong>
               </div>
@@ -215,7 +224,7 @@ export const FlashcardReviewModal: React.FC<FlashcardReviewModalProps> = ({
         </div>
 
         {/* Progress Bar */}
-        {!isFinished && totalCards > 0 && (
+        {!isSessionDone && totalCards > 0 && (
           <div
             style={{
               height: '4px',
@@ -238,7 +247,7 @@ export const FlashcardReviewModal: React.FC<FlashcardReviewModalProps> = ({
         )}
 
         {/* Content Area */}
-        {isFinished ? (
+        {isSessionDone ? (
           /* Finished Screen */
           <div
             style={{
@@ -396,7 +405,7 @@ export const FlashcardReviewModal: React.FC<FlashcardReviewModalProps> = ({
                 >
                   Frente {!isAnswerRevealed && '• (Clique ou tecle Espaço para virar)'}
                 </span>
-                {currentCard && currentCard.dueDate > formatLocalDate(new Date()) && (
+                {currentCard?.dueDate && currentCard.dueDate > formatLocalDate(new Date()) && (
                   <span
                     style={{
                       fontSize: '0.65rem',
@@ -411,7 +420,7 @@ export const FlashcardReviewModal: React.FC<FlashcardReviewModalProps> = ({
                   </span>
                 )}
               </div>
-              <FormattedText text={currentCard.front} isAnswerRevealed={isAnswerRevealed} />
+              <FormattedText text={currentCard?.front || ''} isAnswerRevealed={isAnswerRevealed} />
             </div>
 
             {/* Answer Revealed Back Area */}
@@ -440,14 +449,14 @@ export const FlashcardReviewModal: React.FC<FlashcardReviewModalProps> = ({
                 >
                   Verso (Resposta)
                 </span>
-                <FormattedText text={currentCard.back} isAnswerRevealed={true} />
+                <FormattedText text={currentCard?.back || ''} isAnswerRevealed={true} />
               </div>
             )}
           </div>
         )}
 
         {/* Action Controls / Bottom Buttons */}
-        {!isFinished && (
+        {!isSessionDone && (
           <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
             {!isAnswerRevealed ? (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
@@ -499,7 +508,7 @@ export const FlashcardReviewModal: React.FC<FlashcardReviewModalProps> = ({
                     <span style={{ fontSize: '0.7rem', fontWeight: 800 }}>[ 1 ]</span>
                     <span style={{ fontSize: '1rem', fontWeight: 800, marginTop: '2px' }}>Errei</span>
                     <span style={{ fontSize: '0.75rem', opacity: 0.85, marginTop: '4px' }}>
-                      {previews?.again.label}
+                      {previews?.again.label || '< 1 dia'}
                     </span>
                   </button>
 
@@ -523,7 +532,7 @@ export const FlashcardReviewModal: React.FC<FlashcardReviewModalProps> = ({
                     <span style={{ fontSize: '0.7rem', fontWeight: 800 }}>[ 2 ]</span>
                     <span style={{ fontSize: '1rem', fontWeight: 800, marginTop: '2px' }}>Difícil</span>
                     <span style={{ fontSize: '0.75rem', opacity: 0.85, marginTop: '4px' }}>
-                      {previews?.hard.label}
+                      {previews?.hard.label || '1 dia'}
                     </span>
                   </button>
 
@@ -547,7 +556,7 @@ export const FlashcardReviewModal: React.FC<FlashcardReviewModalProps> = ({
                     <span style={{ fontSize: '0.7rem', fontWeight: 800 }}>[ 3 ]</span>
                     <span style={{ fontSize: '1rem', fontWeight: 800, marginTop: '2px' }}>Bom</span>
                     <span style={{ fontSize: '0.75rem', opacity: 0.85, marginTop: '4px' }}>
-                      {previews?.good.label}
+                      {previews?.good.label || '3 dias'}
                     </span>
                   </button>
 
@@ -571,7 +580,7 @@ export const FlashcardReviewModal: React.FC<FlashcardReviewModalProps> = ({
                     <span style={{ fontSize: '0.7rem', fontWeight: 800 }}>[ 4 ]</span>
                     <span style={{ fontSize: '1rem', fontWeight: 800, marginTop: '2px' }}>Fácil</span>
                     <span style={{ fontSize: '0.75rem', opacity: 0.85, marginTop: '4px' }}>
-                      {previews?.easy.label}
+                      {previews?.easy.label || '5 dias'}
                     </span>
                   </button>
                 </div>

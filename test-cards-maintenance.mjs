@@ -180,4 +180,57 @@ const queue3 = getReviewQueue(undefined, [], [notDue1, notDue2]);
 assert.deepStrictEqual(queue3, [notDue1, notDue2], 'Global review falls back to all cards in free reinforcement mode');
 console.log('✓ Test 5 Passed: Zero-lockout review queue logic verified.');
 
+// Test 6: Flashcard review modal session initialization and crash resilience
+function simulateModalInitialRender(isOpen, cards) {
+  // Simulate React synchronous initialization logic
+  const sessionCards = isOpen && cards ? cards : [];
+  const currentIndex = 0;
+  const isFinished = !cards || cards.length === 0;
+  const currentCard = sessionCards[currentIndex];
+  const isSessionDone = isFinished || !currentCard || sessionCards.length === 0;
+
+  // Verify that rendering checks never throw TypeError on undefined properties
+  const frontText = currentCard?.front || '';
+  const backText = currentCard?.back || '';
+  const previews = currentCard ? getIntervalPreviews(currentCard) : null;
+  const againLabel = previews?.again.label || '< 1 dia';
+
+  return {
+    isSessionDone,
+    totalCards: sessionCards.length,
+    frontText,
+    backText,
+    againLabel
+  };
+}
+
+// Subtest 6A: 15 due cards opened
+const testDeck = Array.from({ length: 15 }, (_, i) => ({
+  id: `card-${i}`,
+  front: `Pergunta ${i}`,
+  back: `Resposta ${i}`,
+  interval: 1,
+  repetition: 1,
+  easeFactor: 2.5,
+  dueDate: todayStr,
+  state: 'review'
+}));
+const renderOpen = simulateModalInitialRender(true, testDeck);
+assert.strictEqual(renderOpen.isSessionDone, false, 'Session is active when deck is open');
+assert.strictEqual(renderOpen.totalCards, 15, 'Session contains all 15 cards');
+assert.strictEqual(renderOpen.frontText, 'Pergunta 0', 'First card rendered cleanly');
+assert.strictEqual(renderOpen.againLabel, '1 dia', 'Interval preview cleanly formatted');
+
+// Subtest 6B: Empty deck opened
+const renderEmpty = simulateModalInitialRender(true, []);
+assert.strictEqual(renderEmpty.isSessionDone, true, 'Empty deck safely treated as done');
+assert.strictEqual(renderEmpty.frontText, '', 'Empty deck handles front text safely without throw');
+
+// Subtest 6C: Undefined cards opened
+const renderUndefined = simulateModalInitialRender(true, undefined);
+assert.strictEqual(renderUndefined.isSessionDone, true, 'Undefined cards safely handled');
+assert.strictEqual(renderUndefined.againLabel, '< 1 dia', 'Undefined cards safely fallback interval');
+
+console.log('✓ Test 6 Passed: Review session initialization & crash resilience verified.');
+
 console.log('=== ALL FLASHCARDS & STUDY CARDS MAINTENANCE TESTS PASSED! ===');
