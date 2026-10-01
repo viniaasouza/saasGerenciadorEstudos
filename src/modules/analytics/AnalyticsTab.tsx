@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../../db/database';
 import type { StudySession, QuestionSession, Subject } from '../../types';
 import { Calendar, Award, Clock, FileText, AlertCircle, CheckCircle, Video, Zap } from 'lucide-react';
+import { getLocalDateString, toLocalDateString } from '../autopilot/autopilotEngine';
 
 interface AnalyticsTabProps {
   activeWorkspaceId: string;
@@ -94,15 +95,17 @@ export const AnalyticsTab: React.FC<AnalyticsTabProps> = ({ activeWorkspaceId })
     const sessionsByDate: { [key: string]: number } = {};
     sessions.forEach((s) => {
       if (s.date) {
-        const dateKey = s.date.split('T')[0];
-        sessionsByDate[dateKey] = (sessionsByDate[dateKey] || 0) + s.durationSeconds;
+        const dateKey = toLocalDateString(s.date);
+        if (dateKey) {
+          sessionsByDate[dateKey] = (sessionsByDate[dateKey] || 0) + s.durationSeconds;
+        }
       }
     });
 
     for (let i = 83; i >= 0; i--) {
       const d = new Date(today);
       d.setDate(today.getDate() - i);
-      const dateStr = d.toISOString().split('T')[0];
+      const dateStr = getLocalDateString(d);
       const seconds = sessionsByDate[dateStr] || 0;
       const hours = parseFloat((seconds / 3600).toFixed(2));
       

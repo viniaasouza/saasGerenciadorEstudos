@@ -52,24 +52,69 @@ export function formatLongPortugueseDate(d: Date = new Date()): string {
   });
 }
 
-export function isCompletedToday(st: Subtopic, todayStr: string): boolean {
-  if (!st.completed || !st.completedAt) return false;
-  if (st.completedAt.startsWith(todayStr)) return true;
-  const [year, month, day] = todayStr.split('-');
-  const brDate = `${day}/${month}/${year}`;
-  const brDate2 = `${Number(day)}/${Number(month)}/${year}`;
-  if (st.completedAt.startsWith(brDate) || st.completedAt.startsWith(brDate2)) return true;
-  return false;
+/**
+ * Safely converts any Date, ISO 8601 string, or localized date string into a local YYYY-MM-DD string,
+ * taking into account the user's local timezone (e.g. UTC-3 in Brazil).
+ */
+export function toLocalDateString(dateInput: string | Date | undefined | null): string {
+  if (!dateInput) return '';
+  try {
+    if (dateInput instanceof Date) {
+      if (isNaN(dateInput.getTime())) return '';
+      return getLocalDateString(dateInput);
+    }
+
+    if (typeof dateInput === 'string') {
+      const trimmed = dateInput.trim();
+      if (!trimmed) return '';
+
+      // If it's a Brazilian date format DD/MM/YYYY
+      if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(trimmed)) {
+        const parts = trimmed.split('/');
+        const day = parts[0].padStart(2, '0');
+        const month = parts[1].padStart(2, '0');
+        const year = parts[2].substring(0, 4);
+        return `${year}-${month}-${day}`;
+      }
+
+      // If it has timezone info or ISO format (e.g. "2026-09-30T01:00:00.000Z"),
+      // parse with Date constructor so it properly shifts to user's local timezone!
+      if (trimmed.includes('T') || trimmed.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(trimmed)) {
+        const parsed = new Date(trimmed);
+        if (!isNaN(parsed.getTime())) {
+          return getLocalDateString(parsed);
+        }
+      }
+
+      // If it's already a plain YYYY-MM-DD date without time (e.g. "2026-09-30")
+      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+        return trimmed;
+      }
+
+      const parsed = new Date(trimmed);
+      if (!isNaN(parsed.getTime())) {
+        return getLocalDateString(parsed);
+      }
+
+      const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (match) {
+        return `${match[1]}-${match[2]}-${match[3]}`;
+      }
+    }
+    return '';
+  } catch {
+    return '';
+  }
 }
 
-export function isBlockCompletedToday(block: StudyBlock, todayStr: string): boolean {
+export function isCompletedToday(st: Subtopic, todayStr: string = getLocalDateString()): boolean {
+  if (!st.completed || !st.completedAt) return false;
+  return toLocalDateString(st.completedAt) === todayStr;
+}
+
+export function isBlockCompletedToday(block: StudyBlock, todayStr: string = getLocalDateString()): boolean {
   if (!block.completed || !block.completedAt) return false;
-  if (block.completedAt.startsWith(todayStr)) return true;
-  const [year, month, day] = todayStr.split('-');
-  const brDate = `${day}/${month}/${year}`;
-  const brDate2 = `${Number(day)}/${Number(month)}/${year}`;
-  if (block.completedAt.startsWith(brDate) || block.completedAt.startsWith(brDate2)) return true;
-  return false;
+  return toLocalDateString(block.completedAt) === todayStr;
 }
 
 /**
@@ -387,13 +432,15 @@ export function getTodayMission(
 
   // 3. Due Reviews and Flashcards for today
   const dueReviews = scopedReviews.filter((r) => {
-    if (!r.done && r.revDate <= todayStr) return true;
-    if (r.done && (r.revDate === todayStr || (r.completedAt && r.completedAt.startsWith(todayStr)))) {
+    const revLocalDate = toLocalDateString(r.revDate);
+    const completedLocalDate = toLocalDateString(r.completedAt);
+    if (!r.done && revLocalDate <= todayStr) return true;
+    if (r.done && (revLocalDate === todayStr || completedLocalDate === todayStr)) {
       return true;
     }
     return false;
   });
-  const dueFlashcardsCount = scopedFlashcards.filter((f) => f.dueDate <= todayStr).length;
+  const dueFlashcardsCount = scopedFlashcards.filter((f) => toLocalDateString(f.dueDate) <= todayStr).length;
 
   // 4. Calculate Tomorrow's Preview
   let tomorrowBlocks = cycleBlocks.filter(

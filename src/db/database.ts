@@ -2,6 +2,7 @@ import type { Subject, Subtopic, StudySession, QuestionSession, StudyBlock, Stud
 import { resolveGranTaxonomy } from '../data/tceGoPreset';
 import { DAYS_ORDER, getMondayOfWeek, getTodayDayName, reallocateIncompleteBlocks } from '../modules/cycle/cycleGenerator';
 import { awardXp, calculateStreakFromDates } from '../modules/autopilot/gamification';
+import { getLocalDateString, toLocalDateString } from '../modules/autopilot/autopilotEngine';
 
 // Version-tagged automatic storage wipe for port 5174 (estud_ai_clean_v4)
 // Purges any legacy keys in localStorage containing old TCE-GO data or un-scoped cycles
@@ -1034,14 +1035,14 @@ export const db = {
     }
 
     // Default initialization based on existing study activity
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = getLocalDateString();
     const sessions = this.getSessions();
     const questions = this.getQuestions();
 
     const activeDates = Array.from(
       new Set([
-        ...sessions.map((s) => s.date.split('T')[0]),
-        ...questions.map((q) => q.date.split('T')[0]),
+        ...sessions.map((s) => toLocalDateString(s.date)).filter(Boolean),
+        ...questions.map((q) => toLocalDateString(q.date)).filter(Boolean),
       ])
     );
 
@@ -1051,14 +1052,16 @@ export const db = {
     const initialDailyXp: Record<string, number> = {};
 
     questions.forEach((q) => {
-      const qDate = q.date.split('T')[0];
+      const qDate = toLocalDateString(q.date);
+      if (!qDate) return;
       const xp = (q.attempted || 0) * 5 + (q.correct || 0) * 5;
       initialXp += xp;
       initialDailyXp[qDate] = (initialDailyXp[qDate] || 0) + xp;
     });
 
     sessions.forEach((s) => {
-      const sDate = s.date.split('T')[0];
+      const sDate = toLocalDateString(s.date);
+      if (!sDate) return;
       const xp = s.studyType === 'teoria' ? 50 : 30;
       initialXp += xp;
       initialDailyXp[sDate] = (initialDailyXp[sDate] || 0) + xp;
@@ -1090,7 +1093,7 @@ export const db = {
     workspaceId?: string
   ): { profile: GamificationProfile; levelUp: boolean; oldLevel: number; newLevel: number } {
     const currentProfile = this.getGamificationProfile();
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = getLocalDateString();
     const { updatedProfile, levelUp, oldLevel, newLevel } = awardXp(
       currentProfile,
       {

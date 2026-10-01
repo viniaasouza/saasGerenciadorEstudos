@@ -152,24 +152,52 @@ function reallocateIncompleteBlocks(blocks, dailyHours, startDayName) {
   return allBlocks.sort((a, b) => a.order - b.order);
 }
 
-function isCompletedToday(st, todayStr) {
-  if (!st.completed || !st.completedAt) return false;
-  if (st.completedAt.startsWith(todayStr)) return true;
-  const [year, month, day] = todayStr.split('-');
-  const brDate = `${day}/${month}/${year}`;
-  const brDate2 = `${Number(day)}/${Number(month)}/${year}`;
-  if (st.completedAt.startsWith(brDate) || st.completedAt.startsWith(brDate2)) return true;
-  return false;
+function toLocalDateString(dateInput) {
+  if (!dateInput) return '';
+  try {
+    if (dateInput instanceof Date) {
+      if (isNaN(dateInput.getTime())) return '';
+      return getLocalDateString(dateInput);
+    }
+    if (typeof dateInput === 'string') {
+      const trimmed = dateInput.trim();
+      if (!trimmed) return '';
+      if (/^\d{1,2}\/\d{1,2}\/\d{4}/.test(trimmed)) {
+        const parts = trimmed.split('/');
+        return `${parts[2].substring(0, 4)}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+      }
+      if (trimmed.includes('T') || trimmed.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(trimmed)) {
+        const parsed = new Date(trimmed);
+        if (!isNaN(parsed.getTime())) {
+          return getLocalDateString(parsed);
+        }
+      }
+      if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+        return trimmed;
+      }
+      const parsed = new Date(trimmed);
+      if (!isNaN(parsed.getTime())) {
+        return getLocalDateString(parsed);
+      }
+      const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (match) {
+        return `${match[1]}-${match[2]}-${match[3]}`;
+      }
+    }
+    return '';
+  } catch {
+    return '';
+  }
 }
 
-function isBlockCompletedToday(block, todayStr) {
+function isCompletedToday(st, todayStr = getLocalDateString()) {
+  if (!st.completed || !st.completedAt) return false;
+  return toLocalDateString(st.completedAt) === todayStr;
+}
+
+function isBlockCompletedToday(block, todayStr = getLocalDateString()) {
   if (!block.completed || !block.completedAt) return false;
-  if (block.completedAt.startsWith(todayStr)) return true;
-  const [year, month, day] = todayStr.split('-');
-  const brDate = `${day}/${month}/${year}`;
-  const brDate2 = `${Number(day)}/${Number(month)}/${year}`;
-  if (block.completedAt.startsWith(brDate) || block.completedAt.startsWith(brDate2)) return true;
-  return false;
+  return toLocalDateString(block.completedAt) === todayStr;
 }
 
 function findSubtopicForSubject(subject, skipSubtopicIds, preferCompletedTodayDate) {
@@ -463,13 +491,15 @@ function getTodayMission(
   }
 
   const dueReviews = scopedReviews.filter((r) => {
-    if (!r.done && r.revDate <= todayStr) return true;
-    if (r.done && (r.revDate === todayStr || (r.completedAt && r.completedAt.startsWith(todayStr)))) {
+    const revLocalDate = toLocalDateString(r.revDate);
+    const completedLocalDate = toLocalDateString(r.completedAt);
+    if (!r.done && revLocalDate <= todayStr) return true;
+    if (r.done && (revLocalDate === todayStr || completedLocalDate === todayStr)) {
       return true;
     }
     return false;
   });
-  const dueFlashcardsCount = scopedFlashcards.filter((f) => f.dueDate <= todayStr).length;
+  const dueFlashcardsCount = scopedFlashcards.filter((f) => toLocalDateString(f.dueDate) <= todayStr).length;
 
   let tomorrowBlocks = cycleBlocks.filter((b) => b.dayAllocated === tomorrowDayName);
   if (tomorrowBlocks.length === 0 && cycleBlocks.length > 0) {
@@ -1154,4 +1184,35 @@ console.log('--- RUNNING AUTOPILOT ENGINE TESTS ---');
   console.log('✓ Test 15 Passed: Week rollover cleans completions and reallocates cleanly.');
 }
 
-console.log('=== ALL 15 AUTOPILOT ENGINE TESTS PASSED SUCCESSFULLY! ===');
+// TEST 16: Timezone-safe local date calculation prevents night studies from leaking into next day
+{
+  const nightStudyUtcIso = '2026-09-30T01:30:00.000Z';
+  const localDate = toLocalDateString(nightStudyUtcIso);
+
+  assert.equal(localDate, '2026-09-29', 'Study at 22:30 BRT on Sept 29 must resolve to 2026-09-29');
+
+  const todayStr = '2026-09-30';
+  const subtopicStudiedYesterdayNight = {
+    id: 'st-night',
+    name: 'Tópico Estudado Ontem à Noite',
+    completed: true,
+    completedAt: nightStudyUtcIso,
+  };
+
+  assert.equal(
+    isCompletedToday(subtopicStudiedYesterdayNight, todayStr),
+    false,
+    'Study done yesterday night must NOT be counted as completed today on Sept 30!'
+  );
+
+  assert.equal(
+    isCompletedToday(subtopicStudiedYesterdayNight, '2026-09-29'),
+    true,
+    'Study done yesterday night MUST be counted as completed on Sept 29!'
+  );
+
+  console.log('✓ Test 16 Passed: Timezone-safe local date calculation strictly prevents night studies from leaking into next day.');
+}
+
+console.log('=== ALL 16 AUTOPILOT ENGINE TESTS PASSED SUCCESSFULLY! ===');
+

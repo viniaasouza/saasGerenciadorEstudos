@@ -83,12 +83,20 @@ export function getLevelInfo(totalXp: number): LevelInfo {
   };
 }
 
+function getLocalTodayString(): string {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 /**
  * Calculates consecutive study days (streak) from a list of active YYYY-MM-DD dates.
  */
 export function calculateStreakFromDates(
   activeDates: string[],
-  todayStr: string = new Date().toISOString().split('T')[0]
+  todayStr: string = getLocalTodayString()
 ): number {
   if (!activeDates || activeDates.length === 0) return 0;
 

@@ -18,6 +18,7 @@ import {
   calculateMissionProgress,
   formatLongPortugueseDate,
   getLocalDateString,
+  toLocalDateString,
 } from './autopilotEngine';
 import { GamificationWidget } from './GamificationWidget';
 import { calculateQuestionXp, XP_CONFIG } from './gamification';
@@ -148,12 +149,12 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
     const todayStr = getLocalDateString();
     const allQuestions = db.getQuestions();
     const todayQ = allQuestions.filter(
-      (q) => q.workspaceId === activeWorkspaceId && q.date.startsWith(todayStr)
+      (q) => q.workspaceId === activeWorkspaceId && toLocalDateString(q.date) === todayStr
     );
 
     const allSessions = db.getSessions();
     const todayS = allSessions
-      .filter((s) => s.workspaceId === activeWorkspaceId && s.date.startsWith(todayStr))
+      .filter((s) => s.workspaceId === activeWorkspaceId && toLocalDateString(s.date) === todayStr)
       .reduce((sum, s) => sum + s.durationSeconds, 0);
 
     const fcKey = `concurso_estudos_fc_reviewed_${activeWorkspaceId}_${todayStr}`;
@@ -216,7 +217,7 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
   // Flashcards due today
   const dueFlashcards = useMemo(() => {
     const todayStr = getLocalDateString();
-    return flashcards.filter((f) => f.dueDate <= todayStr);
+    return flashcards.filter((f) => toLocalDateString(f.dueDate) <= todayStr);
   }, [flashcards]);
 
   // Handlers
