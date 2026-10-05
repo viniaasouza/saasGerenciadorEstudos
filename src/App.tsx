@@ -20,7 +20,7 @@ import { TermsPrivacyModal } from './components/TermsPrivacyModal';
 import { CookieConsentBanner } from './components/CookieConsentBanner';
 import { useAuth } from './context/AuthContext';
 import { db } from './db/database';
-import { promoteSubjectAndReallocate, generateStudyCycle } from './modules/cycle/cycleGenerator';
+import { promoteSubjectAndReallocate, generateStudyCycle, getWeekStartDateTime } from './modules/cycle/cycleGenerator';
 import type { CicloWorkspace, ConcursoInfo } from './types';
 import './index.css';
 
@@ -142,11 +142,10 @@ function App() {
     setWeeklyHoursTarget(config.weeklyHours);
 
     const sessions = db.getSessions();
-    const oneWeekAgo = new Date();
-    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    const weekStart = getWeekStartDateTime();
 
     const recentSeconds = sessions
-      .filter((s) => s.workspaceId === activeWorkspaceId && new Date(s.date) >= oneWeekAgo)
+      .filter((s) => s.workspaceId === activeWorkspaceId && new Date(s.date) >= weekStart)
       .reduce((sum, s) => sum + s.durationSeconds, 0);
 
     setWeeklyHoursCompleted(parseFloat((recentSeconds / 3600).toFixed(1)));
@@ -226,14 +225,13 @@ function App() {
   }, []);
 
   const handleSessionSaved = () => {
-    if (activeBlockId && activeWorkspaceId) {
-      const blocks = db.getCycleBlocks(activeWorkspaceId);
-      const idx = blocks.findIndex((b) => b.id === activeBlockId);
-      if (idx !== -1) {
-        blocks[idx].completed = true;
-        blocks[idx].completedAt = new Date().toISOString();
-        db.saveCycleBlocks(activeWorkspaceId, blocks);
-      }
+    if (activeWorkspaceId) {
+      db.markBlockCompleted(
+        activeWorkspaceId,
+        activeBlockId || undefined,
+        selectedBlockForTimer?.id,
+        selectedBlockForTimer?.name
+      );
     }
 
     setActiveBlockId(null);
@@ -340,6 +338,7 @@ function App() {
             activeWorkspaceId={activeWorkspaceId}
             onStartStudy={handleStartStudy}
             activeBlockId={activeBlockId}
+            refreshTrigger={refreshStatsTrigger}
           />
         );
       case 'syllabus':
@@ -359,6 +358,7 @@ function App() {
             key={activeWorkspaceId}
             activeWorkspaceId={activeWorkspaceId}
             selectedSubject={selectedBlockForTimer}
+            activeBlockId={activeBlockId}
             clearSelectedSubject={handleClearSelectedSubject}
             onSessionSaved={handleSessionSaved}
           />

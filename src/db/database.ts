@@ -1,6 +1,6 @@
 import type { Subject, Subtopic, StudySession, QuestionSession, StudyBlock, StudyCycleConfig, CicloWorkspace, ConcursoInfo, SpacedReview, RunningTimerState, Flashcard, AutopilotSettings, GamificationProfile, GamificationActionType } from '../types';
 import { resolveGranTaxonomy } from '../data/tceGoPreset';
-import { DAYS_ORDER, getMondayOfWeek, getTodayDayName, reallocateIncompleteBlocks } from '../modules/cycle/cycleGenerator';
+import { DAYS_ORDER, getSundayOfWeek, getTodayDayName, reallocateIncompleteBlocks, allocateDaysToBlocks } from '../modules/cycle/cycleGenerator';
 import { awardXp, calculateStreakFromDates } from '../modules/autopilot/gamification';
 import { getLocalDateString, toLocalDateString } from '../modules/autopilot/autopilotEngine';
 
@@ -245,13 +245,13 @@ export const db = {
       weeklyHours: 20,
       cycleDurationWeeks: 1,
       dailyHours: {
+        domingo: 2,
         segunda: 4,
         terca: 4,
         quarta: 4,
         quinta: 4,
         sexta: 4,
-        sabado: 2,
-        domingo: 2
+        sabado: 2
       }
     };
     if (!workspaceId) return defaultConfig;
@@ -285,18 +285,63 @@ export const db = {
     return localStorage.getItem(KEYS.CYCLE_WEEK(workspaceId));
   },
 
-  saveCycleWeek(workspaceId: string, weekMonday: string): void {
+  saveCycleWeek(workspaceId: string, weekSunday: string): void {
     if (!workspaceId) return;
-    localStorage.setItem(KEYS.CYCLE_WEEK(workspaceId), weekMonday);
+    localStorage.setItem(KEYS.CYCLE_WEEK(workspaceId), weekSunday);
+  },
+
+  /**
+   * Marks a cycle block completed.
+   * If blockId is provided, matches by ID.
+   * Otherwise matches the first uncompleted block for the given subject (prioritizing today's day).
+   */
+  markBlockCompleted(workspaceId: string, blockId?: string, subjectId?: string, subjectName?: string): boolean {
+    if (!workspaceId) return false;
+    const blocks = this.getCycleBlocks(workspaceId);
+    if (blocks.length === 0) return false;
+
+    let targetIdx = -1;
+    if (blockId) {
+      targetIdx = blocks.findIndex((b) => b.id === blockId);
+    }
+
+    if (targetIdx === -1 && (subjectId || subjectName)) {
+      const todayDayName = getTodayDayName();
+      // First try to find uncompleted block on today
+      targetIdx = blocks.findIndex((b) => {
+        if (b.completed) return false;
+        const matchesSub = (subjectId && b.subjectId === subjectId) ||
+          (subjectName && b.subjectName.toLowerCase() === subjectName.toLowerCase());
+        return matchesSub && b.dayAllocated === todayDayName;
+      });
+
+      // Otherwise find the first uncompleted block for this subject in the whole cycle
+      if (targetIdx === -1) {
+        targetIdx = blocks.findIndex((b) => {
+          if (b.completed) return false;
+          return (subjectId && b.subjectId === subjectId) ||
+            (subjectName && b.subjectName.toLowerCase() === subjectName.toLowerCase());
+        });
+      }
+    }
+
+    if (targetIdx !== -1) {
+      blocks[targetIdx].completed = true;
+      blocks[targetIdx].completedAt = new Date().toISOString();
+      this.saveCycleBlocks(workspaceId, blocks);
+      return true;
+    }
+
+    return false;
   },
 
   /**
    * Synchronizes the study cycle schedule:
-   * 1. Detects if a new calendar week (Monday to Sunday) has started:
+   * 1. Detects if a new study week (Sunday to Saturday) has started:
    *    - Resets all cycle blocks to completed: false, completedAt: undefined
-   *    - Updates CYCLE_WEEK to current Monday
-   *    - Reallocates blocks cleanly according to cycleConfig.dailyHours starting from Monday
-   * 2. If same week: detects if there are incomplete blocks from days before today:
+   *    - Updates CYCLE_WEEK to current Sunday
+   *    - Reallocates blocks cleanly according to cycleConfig.dailyHours starting from Sunday
+   * 2. If same week: detects if there are incomplete blocks from days before today (Monday-Saturday):
    *    - Reallocates incomplete past blocks forward starting from today
    * Returns { wasReset: boolean, wasReallocated: boolean, blocks: StudyBlock[] }
    */
@@ -311,8 +356,8 @@ export const db = {
     if (blocks.length === 0) return { wasReset: false, wasReallocated: false, blocks: [] };
 
     const config = this.getCycleConfig(workspaceId);
-    const currentMonday = getMondayOfWeek(currentDate);
-    const savedMonday = this.getCycleWeek(workspaceId);
+    const currentSunday = getSundayOfWeek(currentDate);
+    const savedSunday = this.getCycleWeek(workspaceId);
     const todayDayName = getTodayDayName(currentDate);
     const todayIdx = DAYS_ORDER.indexOf(todayDayName as any);
 
@@ -320,11 +365,11 @@ export const db = {
     let wasReallocated = false;
 
     // Case 1: First time initializing week key
-    if (!savedMonday) {
-      this.saveCycleWeek(workspaceId, currentMonday);
+    if (!savedSunday) {
+      this.saveCycleWeek(workspaceId, currentSunday);
     }
-    // Case 2: Week rolled over (new calendar week started)
-    else if (savedMonday !== currentMonday) {
+    // Case 2: Week rolled over (turned from Saturday to Sunday)
+    else if (savedSunday !== currentSunday) {
       wasReset = true;
       // Reset all blocks completions
       const resetBlocks: StudyBlock[] = blocks.map((b) => ({
@@ -332,14 +377,14 @@ export const db = {
         completed: false,
         completedAt: undefined,
       }));
-      // Reallocate all blocks across the new week starting from monday
-      const reallocated = reallocateIncompleteBlocks(resetBlocks, config.dailyHours || {}, 'segunda');
+      // Reallocate all blocks across the new week starting from Sunday (Domingo a Sábado)
+      const reallocated = allocateDaysToBlocks(resetBlocks, config.dailyHours || {});
       this.saveCycleBlocks(workspaceId, reallocated);
-      this.saveCycleWeek(workspaceId, currentMonday);
+      this.saveCycleWeek(workspaceId, currentSunday);
       return { wasReset: true, wasReallocated: true, blocks: reallocated };
     }
 
-    // Case 3: Same week - check for incomplete blocks assigned to days before today
+    // Case 3: Same week - check for incomplete blocks assigned to days before today (only Monday to Saturday)
     if (todayIdx > 0) {
       const hasOverdueIncomplete = blocks.some((b) => {
         if (b.completed) return false;
@@ -360,7 +405,7 @@ export const db = {
 
   /**
    * Restarts the current cycle blocks when all blocks are completed or user manually requests restart.
-   * Keeps subject sequence, resets completed flags and reallocates from today.
+   * Keeps subject sequence, resets completed flags and reallocates from Sunday.
    */
   restartCycle(workspaceId: string, currentDate: Date = new Date()): StudyBlock[] {
     if (!workspaceId) return [];
@@ -368,8 +413,7 @@ export const db = {
     if (blocks.length === 0) return [];
 
     const config = this.getCycleConfig(workspaceId);
-    const todayDayName = getTodayDayName(currentDate);
-    const currentMonday = getMondayOfWeek(currentDate);
+    const currentSunday = getSundayOfWeek(currentDate);
 
     const resetBlocks: StudyBlock[] = blocks.map((b) => ({
       ...b,
@@ -377,9 +421,9 @@ export const db = {
       completedAt: undefined,
     }));
 
-    const reallocated = reallocateIncompleteBlocks(resetBlocks, config.dailyHours || {}, todayDayName);
+    const reallocated = allocateDaysToBlocks(resetBlocks, config.dailyHours || {});
     this.saveCycleBlocks(workspaceId, reallocated);
-    this.saveCycleWeek(workspaceId, currentMonday);
+    this.saveCycleWeek(workspaceId, currentSunday);
     return reallocated;
   },
 

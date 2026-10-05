@@ -9,6 +9,7 @@ import {
 
 interface TimerTabProps {
   selectedSubject: { id: string; name: string; topicId?: string; subtopicId?: string } | null;
+  activeBlockId?: string | null;
   clearSelectedSubject: () => void;
   onSessionSaved: () => void;
   activeWorkspaceId: string;
@@ -16,6 +17,7 @@ interface TimerTabProps {
 
 export const TimerTab: React.FC<TimerTabProps> = ({
   selectedSubject,
+  activeBlockId,
   clearSelectedSubject,
   onSessionSaved,
   activeWorkspaceId,
@@ -460,14 +462,8 @@ export const TimerTab: React.FC<TimerTabProps> = ({
       db.saveRevisoes(activeWorkspaceId, [...newReviews, ...existingReviews]);
     }
 
-    // Automatically mark the current subject block in the workspace cycle as completed
-    const blocks = db.getCycleBlocks(activeWorkspaceId);
-    const incompleteBlockIndex = blocks.findIndex((b) => b.subjectId === sub.id && !b.completed);
-    if (incompleteBlockIndex !== -1) {
-      blocks[incompleteBlockIndex].completed = true;
-      blocks[incompleteBlockIndex].completedAt = new Date().toISOString();
-      db.saveCycleBlocks(activeWorkspaceId, blocks);
-    }
+    // Automatically mark the current block in the workspace cycle as completed
+    db.markBlockCompleted(activeWorkspaceId, activeBlockId || undefined, sub.id, sub.name);
 
     // Mark subtopic as completed in workspace subjects tree if specified
     if (subtop) {
@@ -518,9 +514,8 @@ export const TimerTab: React.FC<TimerTabProps> = ({
     setScheduledIntervals([]);
     setStudyType('teoria');
     handleReset();
-    clearSelectedSubject();
-    
     onSessionSaved();
+    clearSelectedSubject();
   };
 
   // 5. Manual Study Logging: Step 1 - Validate inputs and request confirmation modal
@@ -642,13 +637,7 @@ export const TimerTab: React.FC<TimerTabProps> = ({
     }
 
     // Mark cycle block as completed
-    const blocks = db.getCycleBlocks(activeWorkspaceId);
-    const incompleteBlockIndex = blocks.findIndex((b) => b.subjectId === sub.id && !b.completed);
-    if (incompleteBlockIndex !== -1) {
-      blocks[incompleteBlockIndex].completed = true;
-      blocks[incompleteBlockIndex].completedAt = new Date().toISOString();
-      db.saveCycleBlocks(activeWorkspaceId, blocks);
-    }
+    db.markBlockCompleted(activeWorkspaceId, activeBlockId || undefined, sub.id, sub.name);
 
     // Mark subtopic as completed in subjects tree
     if (subtop) {

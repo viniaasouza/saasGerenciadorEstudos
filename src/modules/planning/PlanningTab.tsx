@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../../db/database';
-import { generateStudyCycle, parseVerticalSyllabus, reallocateIncompleteBlocks, DAYS_ORDER } from '../cycle/cycleGenerator';
+import { generateStudyCycle, parseVerticalSyllabus, reallocateIncompleteBlocks, normalizeDailyHours, getTodayDayName, DAYS_ORDER } from '../cycle/cycleGenerator';
 import type { Subject, StudyBlock, SubjectStatus, StudyCycleConfig } from '../../types';
 import { AiSyllabusImportModal } from '../syllabus/AiSyllabusImportModal';
 import { Plus, Trash2, RefreshCw, Upload, CheckCircle2, Circle, ChevronDown, ChevronUp, AlertTriangle, Calendar, Play, Settings, FileText, Sparkles } from 'lucide-react';
@@ -9,15 +9,16 @@ interface PlanningTabProps {
   onStartStudy: (subjectId: string, subjectName: string, blockId: string) => void;
   activeBlockId: string | null;
   activeWorkspaceId: string;
+  refreshTrigger?: number;
 }
 
-export const PlanningTab: React.FC<PlanningTabProps> = ({ onStartStudy, activeBlockId, activeWorkspaceId }) => {
+export const PlanningTab: React.FC<PlanningTabProps> = ({ onStartStudy, activeBlockId, activeWorkspaceId, refreshTrigger }) => {
   // Load initial state from LocalStorage based on activeWorkspaceId
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [cycleConfig, setCycleConfig] = useState<StudyCycleConfig>({ 
     weeklyHours: 20, 
     cycleDurationWeeks: 1, 
-    dailyHours: { segunda: 4, terca: 4, quarta: 4, quinta: 4, sexta: 4, sabado: 2, domingo: 2 } 
+    dailyHours: { domingo: 2, segunda: 4, terca: 4, quarta: 4, quinta: 4, sexta: 4, sabado: 2 } 
   });
   const [cycleBlocks, setCycleBlocks] = useState<StudyBlock[]>([]);
   
@@ -38,11 +39,11 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({ onStartStudy, activeBl
     setCycleConfig({
       weeklyHours: config.weeklyHours,
       cycleDurationWeeks: config.cycleDurationWeeks,
-      dailyHours: config.dailyHours || { segunda: 4, terca: 4, quarta: 4, quinta: 4, sexta: 4, sabado: 2, domingo: 2 }
+      dailyHours: config.dailyHours || { domingo: 2, segunda: 4, terca: 4, quarta: 4, quinta: 4, sexta: 4, sabado: 2 }
     });
     const syncRes = db.syncCycleSchedule(activeWorkspaceId);
     setCycleBlocks(syncRes.blocks);
-  }, [activeWorkspaceId]);
+  }, [activeWorkspaceId, refreshTrigger]);
 
   const handleSaveSubjects = (updatedSubjects: Subject[]) => {
     setSubjects(updatedSubjects);
@@ -76,6 +77,18 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({ onStartStudy, activeBl
     };
     reader.readAsText(file);
     e.target.value = '';
+  };
+
+  // Update weekly hours and recalculate daily availability proportionally
+  const handleWeeklyHoursChange = (newHours: number) => {
+    const validHours = Math.max(1, Math.min(100, newHours));
+    const normalizedDaily = normalizeDailyHours(validHours, cycleConfig.dailyHours);
+    const updatedConfig: StudyCycleConfig = {
+      ...cycleConfig,
+      weeklyHours: validHours,
+      dailyHours: normalizedDaily,
+    };
+    handleSaveConfig(updatedConfig);
   };
 
   // Update specific day hours availability
@@ -168,8 +181,13 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({ onStartStudy, activeBl
   const handleGenerateCycle = () => {
     if (subjects.length === 0) return;
     
-    const blocks = generateStudyCycle(subjects, cycleConfig.weeklyHours, 90, cycleConfig.dailyHours || undefined);
+    const normalizedDaily = normalizeDailyHours(cycleConfig.weeklyHours, cycleConfig.dailyHours);
+    const blocks = generateStudyCycle(subjects, cycleConfig.weeklyHours, 90, normalizedDaily);
     handleSaveBlocks(blocks);
+    handleSaveConfig({
+      ...cycleConfig,
+      dailyHours: normalizedDaily,
+    });
 
     // Calculate individual target hours for display
     const maintenanceList = subjects.filter((s) => s.status === 'maintenance');
@@ -204,9 +222,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({ onStartStudy, activeBl
   const handleRescheduleOverdue = () => {
     if (cycleBlocks.length === 0) return;
 
-    const jsDayMap = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
-    const todayName = jsDayMap[new Date().getDay()];
-
+    const todayName = getTodayDayName();
     const updated = reallocateIncompleteBlocks(cycleBlocks, cycleConfig.dailyHours || {}, todayName);
     handleSaveBlocks(updated);
   };
@@ -235,8 +251,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({ onStartStudy, activeBl
   const activeSubjectsCount = subjects.filter(s => s.status === 'active').length;
 
   // Calculate day states for display
-  const jsDayMap = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
-  const todayName = jsDayMap[new Date().getDay()];
+  const todayName = getTodayDayName();
   const todayIdx = DAYS_ORDER.indexOf(todayName);
 
   return (
@@ -277,21 +292,59 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({ onStartStudy, activeBl
       <div className="placeholder-grid" style={{ marginBottom: '1rem' }}>
         <div className="placeholder-card card-primary" style={{ minHeight: 'auto', padding: '1.5rem' }}>
           <h3>Horas Semanais Totais</h3>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '0.5rem' }}>
-            <span style={{ fontSize: '2rem', fontWeight: '800', color: 'var(--text-title)' }}>
-              {cycleConfig.weeklyHours}h
-            </span>
-            <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', lineHeight: '1.2' }}>
-              Calculadas com base na carga diária
-            </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <input
+                type="number"
+                min="1"
+                max="80"
+                value={cycleConfig.weeklyHours}
+                onChange={(e) => handleWeeklyHoursChange(parseInt(e.target.value) || 0)}
+                style={{
+                  fontSize: '1.5rem',
+                  fontWeight: '800',
+                  color: 'var(--text-title)',
+                  width: '75px',
+                  padding: '0.2rem 0.4rem',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-color)',
+                  backgroundColor: 'var(--bg-element)',
+                  textAlign: 'center'
+                }}
+              />
+              <span style={{ fontSize: '1.2rem', fontWeight: '800', color: 'var(--text-title)' }}>h/sem</span>
+            </div>
+            <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap' }}>
+              {[15, 20, 25, 30, 35, 40].map((h) => (
+                <button
+                  key={h}
+                  type="button"
+                  onClick={() => handleWeeklyHoursChange(h)}
+                  className="mock-btn"
+                  style={{
+                    padding: '0.25rem 0.5rem',
+                    fontSize: '0.75rem',
+                    fontWeight: cycleConfig.weeklyHours === h ? '800' : '500',
+                    backgroundColor: cycleConfig.weeklyHours === h ? 'var(--color-primary)' : 'var(--bg-element)',
+                    color: cycleConfig.weeklyHours === h ? '#fff' : 'var(--text-muted)',
+                    border: '1px solid var(--border-color)',
+                  }}
+                >
+                  {h}h
+                </button>
+              ))}
+            </div>
           </div>
+          <p className="card-notes" style={{ marginTop: '0.5rem' }}>
+            Distribuídas proporcionalmente na semana conforme os pesos das matérias ativas.
+          </p>
           <button 
             onClick={() => setShowAvailabilityPanel(!showAvailabilityPanel)}
             className="mock-btn text-muted" 
             style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.8rem', padding: '0.4rem 0.8rem', marginTop: '0.5rem', alignSelf: 'flex-start' }}
           >
             <Settings size={14} />
-            {showAvailabilityPanel ? 'Fechar Horas Diárias' : 'Ajustar Horas Diárias'}
+            {showAvailabilityPanel ? 'Fechar Horas Diárias' : 'Personalizar Horas Diárias'}
           </button>
         </div>
 

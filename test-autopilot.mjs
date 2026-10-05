@@ -69,7 +69,7 @@ function buildGranQuestoesUrl(input, banca = 'FCC', filterBanca = true) {
 }
 
 const DOW_MAP = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
-const DAYS_ORDER = ['segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado', 'domingo'];
+const DAYS_ORDER = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado'];
 
 function getLocalDateString(d = new Date()) {
   const year = d.getFullYear();
@@ -88,68 +88,142 @@ function getDayOfWeekName(d = new Date()) {
   return DOW_MAP[d.getDay()];
 }
 
-function getMondayOfWeek(d = new Date()) {
+function getSundayOfWeek(d = new Date()) {
   const date = new Date(d);
   const day = date.getDay();
-  const diff = date.getDate() - (day === 0 ? 6 : day - 1);
-  const monday = new Date(date.setDate(diff));
-  const year = monday.getFullYear();
-  const month = String(monday.getMonth() + 1).padStart(2, '0');
-  const dayNum = String(monday.getDate()).padStart(2, '0');
+  const sunday = new Date(date.getFullYear(), date.getMonth(), date.getDate() - day);
+  const year = sunday.getFullYear();
+  const month = String(sunday.getMonth() + 1).padStart(2, '0');
+  const dayNum = String(sunday.getDate()).padStart(2, '0');
   return `${year}-${month}-${dayNum}`;
 }
 
+function getWeekStartDateTime(d = new Date()) {
+  const date = new Date(d);
+  const day = date.getDay();
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() - day, 0, 0, 0, 0);
+}
+
+function getMondayOfWeek(d = new Date()) {
+  return getSundayOfWeek(d);
+}
+
 function getTodayDayName(d = new Date()) {
-  const day = d.getDay();
-  return DAYS_ORDER[day === 0 ? 6 : day - 1];
+  return DAYS_ORDER[d.getDay()];
+}
+
+function allocateDaysToBlocks(blocks, dailyHours) {
+  if (blocks.length === 0) return [];
+  const dayMinutesPlanned = {};
+  const dayLimits = {};
+  DAYS_ORDER.forEach((d) => {
+    dayMinutesPlanned[d] = 0;
+    dayLimits[d] = Math.round((dailyHours[d] || 0) * 60);
+  });
+
+  const activeDays = DAYS_ORDER.filter((d) => dayLimits[d] > 0);
+  const fallbackDays = activeDays.length > 0 ? activeDays : [...DAYS_ORDER];
+  let currentDayIdx = 0;
+
+  return blocks.map((block) => {
+    let chosenDay = '';
+    let attempts = 0;
+
+    while (attempts < fallbackDays.length) {
+      const day = fallbackDays[currentDayIdx % fallbackDays.length];
+      const limit = dayLimits[day] || 0;
+      const planned = dayMinutesPlanned[day] || 0;
+
+      if (planned === 0 || planned + block.durationMinutes <= limit) {
+        chosenDay = day;
+        dayMinutesPlanned[day] += block.durationMinutes;
+        if (dayMinutesPlanned[day] >= limit) {
+          currentDayIdx++;
+        }
+        break;
+      } else {
+        currentDayIdx++;
+        attempts++;
+      }
+    }
+
+    if (!chosenDay) {
+      const sortedByUsage = [...fallbackDays].sort(
+        (a, b) => (dayMinutesPlanned[a] || 0) - (dayMinutesPlanned[b] || 0)
+      );
+      chosenDay = sortedByUsage[0];
+      dayMinutesPlanned[chosenDay] += block.durationMinutes;
+    }
+
+    block.dayAllocated = chosenDay;
+    return block;
+  });
 }
 
 function reallocateIncompleteBlocks(blocks, dailyHours, startDayName) {
   const startDayIdx = DAYS_ORDER.indexOf(startDayName);
+  const effectiveStartIdx = startDayIdx === -1 ? 0 : startDayIdx;
+
   const completedBlocks = blocks.filter((b) => b.completed);
   const incompleteBlocks = blocks.filter((b) => !b.completed);
+  if (incompleteBlocks.length === 0) return blocks;
+
   const sortedIncomplete = [...incompleteBlocks].sort((a, b) => a.order - b.order);
+  const remainingDays = DAYS_ORDER.slice(effectiveStartIdx);
+  const candidateDays = remainingDays.length > 0 ? remainingDays : [...DAYS_ORDER];
 
-  let dayIdx = startDayIdx === -1 ? 0 : startDayIdx;
-  let accumulatedMinutes = 0;
-
-  const completedMinutesByDay = {};
+  const occupiedMinutes = {};
+  const dayLimits = {};
   DAYS_ORDER.forEach((d) => {
-    completedMinutesByDay[d] = completedBlocks
+    occupiedMinutes[d] = completedBlocks
       .filter((b) => b.dayAllocated === d)
       .reduce((sum, b) => sum + b.durationMinutes, 0);
+    dayLimits[d] = Math.round((dailyHours[d] || 0) * 60);
   });
 
+  const activeCandidateDays = candidateDays.filter((d) => (dayLimits[d] || 0) > 0);
+  const fallbackDays = activeCandidateDays.length > 0 ? activeCandidateDays : candidateDays;
+
+  let dayPointer = 0;
   const rescheduledIncomplete = sortedIncomplete.map((block) => {
-    let allocated = false;
-    while (dayIdx < 7) {
-      const currentDay = DAYS_ORDER[dayIdx];
-      const limitMinutes = (dailyHours[currentDay] || 0) * 60;
-      if (limitMinutes === 0) {
-        dayIdx++;
-        accumulatedMinutes = 0;
-        continue;
-      }
-      const occupiedByCompleted = completedMinutesByDay[currentDay] || 0;
-      const availableMinutes = Math.max(0, limitMinutes - occupiedByCompleted);
-      if (accumulatedMinutes + block.durationMinutes <= availableMinutes || (accumulatedMinutes === 0 && occupiedByCompleted < limitMinutes)) {
-        block.dayAllocated = currentDay;
-        accumulatedMinutes += block.durationMinutes;
-        allocated = true;
+    let chosenDay = '';
+    let attempts = 0;
+
+    while (attempts < fallbackDays.length) {
+      const currentDay = fallbackDays[dayPointer % fallbackDays.length];
+      const limit = dayLimits[currentDay] || 0;
+      const occupied = occupiedMinutes[currentDay] || 0;
+
+      if (occupied + block.durationMinutes <= limit || (occupied === 0 && limit > 0)) {
+        chosenDay = currentDay;
+        occupiedMinutes[currentDay] += block.durationMinutes;
+        if (occupiedMinutes[currentDay] >= limit) {
+          dayPointer++;
+        }
         break;
       } else {
-        dayIdx++;
-        accumulatedMinutes = 0;
+        dayPointer++;
+        attempts++;
       }
     }
-    if (!allocated) {
-      block.dayAllocated = 'domingo';
+
+    if (!chosenDay) {
+      const sortedByLoad = [...fallbackDays].sort(
+        (a, b) => (occupiedMinutes[a] || 0) - (occupiedMinutes[b] || 0)
+      );
+      chosenDay = sortedByLoad[0];
+      occupiedMinutes[chosenDay] += block.durationMinutes;
     }
+
+    block.dayAllocated = chosenDay;
     return block;
   });
 
-  const allBlocks = [...completedBlocks, ...rescheduledIncomplete];
-  return allBlocks.sort((a, b) => a.order - b.order);
+  return blocks.map((b) => {
+    if (b.completed) return b;
+    const updated = rescheduledIncomplete.find((u) => u.id === b.id);
+    return updated || b;
+  });
 }
 
 function toLocalDateString(dateInput) {
@@ -1153,12 +1227,12 @@ console.log('--- RUNNING AUTOPILOT ENGINE TESTS ---');
   const lastWeekDate = new Date('2026-09-09T12:00:00Z'); // Wednesday of week 1
   const thisWeekDate = new Date('2026-09-16T12:00:00Z'); // Wednesday of week 2
 
-  const lastWeekMonday = getMondayOfWeek(lastWeekDate);
-  const thisWeekMonday = getMondayOfWeek(thisWeekDate);
+  const lastWeekSunday = getSundayOfWeek(lastWeekDate);
+  const thisWeekSunday = getSundayOfWeek(thisWeekDate);
 
-  assert.notEqual(lastWeekMonday, thisWeekMonday, 'Week rollover must detect Monday change');
-  assert.equal(lastWeekMonday, '2026-09-07');
-  assert.equal(thisWeekMonday, '2026-09-14');
+  assert.notEqual(lastWeekSunday, thisWeekSunday, 'Week rollover must detect Sunday change');
+  assert.equal(lastWeekSunday, '2026-09-06');
+  assert.equal(thisWeekSunday, '2026-09-13');
 
   // Blocks completed in the previous week
   const oldBlocks = [
@@ -1173,12 +1247,12 @@ console.log('--- RUNNING AUTOPILOT ENGINE TESTS ---');
     completedAt: undefined,
   }));
 
-  const dailyHours = { segunda: 2, terca: 2, quarta: 2, quinta: 2, sexta: 2, sabado: 1, domingo: 1 };
-  const reallocated = reallocateIncompleteBlocks(resetBlocks, dailyHours, 'segunda');
+  const dailyHours = { domingo: 1, segunda: 2, terca: 2, quarta: 2, quinta: 2, sexta: 2, sabado: 1 };
+  const reallocated = reallocateIncompleteBlocks(resetBlocks, dailyHours, 'domingo');
 
   assert.equal(reallocated.every((b) => !b.completed), true, 'All blocks must be uncompleted after week reset');
   assert.equal(reallocated.every((b) => b.completedAt === undefined), true, 'All completedAt timestamps must be cleared');
-  assert.equal(reallocated[0].dayAllocated, 'segunda');
+  assert.equal(reallocated[0].dayAllocated, 'domingo');
   assert.equal(reallocated[1].dayAllocated, 'segunda');
 
   console.log('✓ Test 15 Passed: Week rollover cleans completions and reallocates cleanly.');
@@ -1214,5 +1288,103 @@ console.log('--- RUNNING AUTOPILOT ENGINE TESTS ---');
   console.log('✓ Test 16 Passed: Timezone-safe local date calculation strictly prevents night studies from leaking into next day.');
 }
 
-console.log('=== ALL 16 AUTOPILOT ENGINE TESTS PASSED SUCCESSFULLY! ===');
+// TEST 17: Saturday-to-Sunday rollover strictly resets cycle completions and studied hours
+{
+  const saturdayNight = new Date(2026, 9, 3, 23, 59, 59); // 2026-10-03 23:59:59 (Saturday)
+  const sundayMorning = new Date(2026, 9, 4, 0, 0, 0); // 2026-10-04 00:00:00 (Sunday)
+
+  assert.equal(saturdayNight.getDay(), 6, 'Saturday is day 6');
+  assert.equal(sundayMorning.getDay(), 0, 'Sunday is day 0');
+
+  const saturdayWeek = getSundayOfWeek(saturdayNight);
+  const sundayWeek = getSundayOfWeek(sundayMorning);
+
+  assert.notEqual(saturdayWeek, sundayWeek, 'Saturday to Sunday must trigger week rollover');
+  assert.equal(saturdayWeek, '2026-09-27');
+  assert.equal(sundayWeek, '2026-10-04');
+
+  // Verify studied hours reset:
+  const weekStartSunday = getWeekStartDateTime(sundayMorning);
+  const sessions = [
+    { id: 's1', workspaceId: 'ws-1', date: saturdayNight.toISOString(), durationSeconds: 7200 },
+    { id: 's2', workspaceId: 'ws-1', date: sundayMorning.toISOString(), durationSeconds: 3600 },
+  ];
+
+  // On Saturday: both s1 would be included in that week
+  const satWeekStart = getWeekStartDateTime(saturdayNight);
+  const satSeconds = sessions
+    .filter((s) => new Date(s.date) >= satWeekStart)
+    .reduce((sum, s) => sum + s.durationSeconds, 0);
+  assert.equal(satSeconds, 10800); // 3h
+
+  // On Sunday: s1 (Saturday study) is excluded, resetting studied hours!
+  const sunSeconds = sessions
+    .filter((s) => new Date(s.date) >= weekStartSunday)
+    .reduce((sum, s) => sum + s.durationSeconds, 0);
+  assert.equal(sunSeconds, 3600); // Only s2 (1h), Saturday study cleanly reset
+
+  // Verify blocks are distributed across the week and NOT all dumped into Sunday
+  const blocksToDistribute = [
+    { id: 'b1', subjectId: 's1', durationMinutes: 90, order: 1 },
+    { id: 'b2', subjectId: 's2', durationMinutes: 90, order: 2 },
+    { id: 'b3', subjectId: 's3', durationMinutes: 90, order: 3 },
+    { id: 'b4', subjectId: 's1', durationMinutes: 90, order: 4 },
+    { id: 'b5', subjectId: 's2', durationMinutes: 90, order: 5 },
+    { id: 'b6', subjectId: 's3', durationMinutes: 90, order: 6 },
+    { id: 'b7', subjectId: 's1', durationMinutes: 90, order: 7 },
+  ];
+  const dailyHours = { domingo: 2, segunda: 4, terca: 4, quarta: 4, quinta: 4, sexta: 4, sabado: 2 };
+  const allocated = allocateDaysToBlocks(blocksToDistribute, dailyHours);
+
+  const daysUsed = new Set(allocated.map((b) => b.dayAllocated));
+  assert.ok(daysUsed.size >= 4, 'Blocks must be distributed across multiple days of the week');
+  const sundayBlocks = allocated.filter((b) => b.dayAllocated === 'domingo');
+  assert.ok(sundayBlocks.length <= 2, 'Sunday must NOT have all blocks dumped into it');
+
+  console.log('✓ Test 17 Passed: Saturday-to-Sunday rollover strictly resets cycle completions and studied hours without dumping into Sunday.');
+}
+
+// TEST 18: Live study completion correctly updates cycle block completion
+{
+  const cycleBlocks = [
+    { id: 'b-10', subjectId: 'sub-port', subjectName: 'Português', durationMinutes: 90, completed: false, dayAllocated: 'domingo' },
+    { id: 'b-20', subjectId: 'sub-ti', subjectName: 'Tecnologia da Informação', durationMinutes: 90, completed: false, dayAllocated: 'segunda' },
+  ];
+
+  // Simulate markBlockCompleted by ID
+  function testMarkBlockCompleted(blocks, blockId, subjectId, subjectName) {
+    let targetIdx = -1;
+    if (blockId) {
+      targetIdx = blocks.findIndex((b) => b.id === blockId);
+    }
+    if (targetIdx === -1 && (subjectId || subjectName)) {
+      targetIdx = blocks.findIndex((b) => {
+        if (b.completed) return false;
+        return (subjectId && b.subjectId === subjectId) ||
+          (subjectName && b.subjectName.toLowerCase() === subjectName.toLowerCase());
+      });
+    }
+    if (targetIdx !== -1) {
+      blocks[targetIdx].completed = true;
+      blocks[targetIdx].completedAt = new Date().toISOString();
+      return true;
+    }
+    return false;
+  }
+
+  const success1 = testMarkBlockCompleted(cycleBlocks, 'b-10');
+  assert.equal(success1, true);
+  assert.equal(cycleBlocks[0].completed, true);
+  assert.ok(cycleBlocks[0].completedAt);
+
+  // Mark second by subject ID
+  const success2 = testMarkBlockCompleted(cycleBlocks, null, 'sub-ti');
+  assert.equal(success2, true);
+  assert.equal(cycleBlocks[1].completed, true);
+  assert.ok(cycleBlocks[1].completedAt);
+
+  console.log('✓ Test 18 Passed: Live study registration marks cycle blocks completed with timestamps.');
+}
+
+console.log('=== ALL 18 AUTOPILOT ENGINE TESTS PASSED SUCCESSFULLY! ===');
 
