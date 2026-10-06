@@ -1124,7 +1124,7 @@ export const FlashcardsTab: React.FC<FlashcardsTabProps> = ({ activeWorkspaceId 
           cards={reviewQueue}
           onSaveCard={(card) => {
             handleSaveCard(card);
-            db.recordFlashcardStudySession(activeWorkspaceId, card, 3);
+            db.recordFlashcardStudySession(activeWorkspaceId, card, 75);
           }}
           onClose={() => {
             setIsReviewModalOpen(false);

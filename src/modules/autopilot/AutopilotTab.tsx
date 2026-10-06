@@ -672,7 +672,7 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
                     {dueFlashcards.length} flashcard{dueFlashcards.length > 1 ? 's' : ''} para revisar no SM-2
                   </div>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                    Repetição espaçada algorítmica (+3 min por card adicionados ao tempo de estudo).
+                    Repetição espaçada algorítmica (+1m 15s por card adicionados ao tempo de estudo).
                   </div>
                 </div>
               </div>
@@ -693,7 +693,7 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
                 }}
               >
                 <Brain size={16} />
-                Revisar {dueFlashcards.length} Flashcard{dueFlashcards.length > 1 ? 's' : ''} (+3 min/card • +10 XP)
+                Revisar {dueFlashcards.length} Flashcard{dueFlashcards.length > 1 ? 's' : ''} (+1m 15s/card • +10 XP)
               </button>
             </div>
           )}
@@ -1559,8 +1559,8 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
               localStorage.setItem(key, String(nextCount));
             }
 
-            // Registra 3 minutos (180s) de tempo de estudo por flashcard revisado
-            db.recordFlashcardStudySession(activeWorkspaceId, card, 3);
+            // Registra 1m 15s (75s) de tempo de estudo por flashcard revisado
+            db.recordFlashcardStudySession(activeWorkspaceId, card, 75);
 
             triggerXpAward('flashcard_reviewed', XP_CONFIG.FLASHCARD_REVIEWED, 'Flashcard revisado (SM-2)');
           }}

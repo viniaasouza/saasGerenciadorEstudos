@@ -734,12 +734,12 @@ export const db = {
 
   /**
    * Records study session for completed flashcard review.
-   * Adds fixed average time (default 3 minutes = 180s per card).
+   * Adds fixed average time (default 1 min 15 sec = 75s per card).
    */
   recordFlashcardStudySession(
     workspaceId: string,
     card: Flashcard,
-    durationMinutes: number = 3
+    durationSeconds: number = 75
   ): StudySession | null {
     if (!workspaceId || !card) return null;
 
@@ -752,12 +752,12 @@ export const db = {
       subjectId: card.subjectId || 'flashcards',
       subjectName: card.subjectName || 'Flashcards',
       topicName: card.topicName || 'Revisão Anki SM-2',
-      durationSeconds: durationMinutes * 60,
+      durationSeconds,
       date: new Date().toISOString(),
       studyType: 'revisao',
       workspaceId,
       workspaceName,
-      notes: `Revisão de flashcard (${durationMinutes} min)`,
+      notes: 'Revisão de flashcard (1m 15s)',
     };
 
     const sessions = this.getSessions();

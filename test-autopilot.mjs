@@ -1411,13 +1411,13 @@ console.log('--- RUNNING AUTOPILOT ENGINE TESTS ---');
     mockSessions = mockSessions.filter((s) => s.id !== sessionId);
   }
 
-  function recordFlashcardStudySession(workspaceId, card, durationMinutes = 3) {
+  function recordFlashcardStudySession(workspaceId, card, durationSeconds = 75) {
     const fcSession = {
       id: `session-fc-${Date.now()}-${Math.random()}`,
       subjectId: card.subjectId || 'flashcards',
       subjectName: card.subjectName || 'Flashcards',
       topicName: card.topicName || 'Revisão Anki SM-2',
-      durationSeconds: durationMinutes * 60,
+      durationSeconds,
       date: new Date().toISOString(),
       studyType: 'revisao',
       workspaceId,
@@ -1433,22 +1433,22 @@ console.log('--- RUNNING AUTOPILOT ENGINE TESTS ---');
   assert.equal(mockSessions[0].durationSeconds, 600, 'Review completion must add 600s (10 min)');
   assert.equal(mockSessions[0].studyType, 'revisao');
 
-  // 2. Reviewing a flashcard adds 3 min (180s)
+  // 2. Reviewing a flashcard adds 1m 15s (75s)
   const testCard = { id: 'card-1', subjectId: 'sub-ti', subjectName: 'TI', topicName: 'SQL DDL' };
-  recordFlashcardStudySession('ws-1', testCard, 3);
+  recordFlashcardStudySession('ws-1', testCard, 75);
   assert.equal(mockSessions.length, 2);
-  assert.equal(mockSessions[0].durationSeconds, 180, 'Flashcard review must add 180s (3 min)');
+  assert.equal(mockSessions[0].durationSeconds, 75, 'Flashcard review must add 75s (1m 15s)');
 
-  // Total study time: 600s + 180s = 780s (13 minutes)
+  // Total study time: 600s + 75s = 675s (11 minutes 15 seconds)
   const totalSeconds = mockSessions.reduce((sum, s) => sum + s.durationSeconds, 0);
-  assert.equal(totalSeconds, 780, 'Total study time must be 13 minutes (10m review + 3m flashcard)');
+  assert.equal(totalSeconds, 675, 'Total study time must be 11m 15s (10m review + 1m 15s flashcard)');
 
   // 3. Undoing the review removes the 10 min
   removeReviewStudySession('ws-1', 'rev-test-1');
   assert.equal(mockSessions.length, 1);
-  assert.equal(mockSessions[0].durationSeconds, 180, 'Only the 3 min flashcard remains');
+  assert.equal(mockSessions[0].durationSeconds, 75, 'Only the 1m 15s flashcard remains');
 
-  console.log('✓ Test 19 Passed: Review completion (+10 min) and flashcard review (+3 min) correctly compute in study time.');
+  console.log('✓ Test 19 Passed: Review completion (+10 min) and flashcard review (+1m 15s) correctly compute in study time.');
 }
 
 console.log('=== ALL 19 AUTOPILOT ENGINE TESTS PASSED SUCCESSFULLY! ===');
