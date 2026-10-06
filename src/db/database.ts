@@ -677,6 +677,94 @@ export const db = {
     return { updatedSubjects, scheduledReview };
   },
 
+  /**
+   * Records study session for completed spaced review (leitura de resumo).
+   * Adds fixed average time (default 10 minutes = 600s).
+   */
+  recordReviewStudySession(
+    workspaceId: string,
+    review: SpacedReview,
+    durationMinutes: number = 10
+  ): StudySession | null {
+    if (!workspaceId || !review) return null;
+
+    const wsList = this.getWorkspaces();
+    const currentWs = wsList.find((w) => w.id === workspaceId);
+    const workspaceName = currentWs ? currentWs.name : undefined;
+
+    const sessionId = `session-rev-${review.id}`;
+    const sessions = this.getSessions();
+    const existingIdx = sessions.findIndex((s) => s.id === sessionId);
+
+    const revSession: StudySession = {
+      id: sessionId,
+      subjectId: review.subjectId,
+      subjectName: review.subjectName,
+      topicName: review.topicName,
+      durationSeconds: durationMinutes * 60,
+      date: new Date().toISOString(),
+      studyType: 'revisao',
+      workspaceId,
+      workspaceName,
+      notes: `Leitura de resumo / Revisão espaçada (${review.days ? `D+${review.days}` : 'Resumo'}) concluída (${durationMinutes} min)`,
+    };
+
+    if (existingIdx !== -1) {
+      sessions[existingIdx] = revSession;
+      this.saveSessions(sessions);
+    } else {
+      this.saveSessions([revSession, ...sessions]);
+    }
+
+    return revSession;
+  },
+
+  /**
+   * Removes study session associated with an undone review.
+   */
+  removeReviewStudySession(workspaceId: string, reviewId: string): void {
+    if (!workspaceId || !reviewId) return;
+    const sessionId = `session-rev-${reviewId}`;
+    const sessions = this.getSessions();
+    const filtered = sessions.filter((s) => s.id !== sessionId);
+    if (filtered.length !== sessions.length) {
+      this.saveSessions(filtered);
+    }
+  },
+
+  /**
+   * Records study session for completed flashcard review.
+   * Adds fixed average time (default 3 minutes = 180s per card).
+   */
+  recordFlashcardStudySession(
+    workspaceId: string,
+    card: Flashcard,
+    durationMinutes: number = 3
+  ): StudySession | null {
+    if (!workspaceId || !card) return null;
+
+    const wsList = this.getWorkspaces();
+    const currentWs = wsList.find((w) => w.id === workspaceId);
+    const workspaceName = currentWs ? currentWs.name : undefined;
+
+    const fcSession: StudySession = {
+      id: `session-fc-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      subjectId: card.subjectId || 'flashcards',
+      subjectName: card.subjectName || 'Flashcards',
+      topicName: card.topicName || 'Revisão Anki SM-2',
+      durationSeconds: durationMinutes * 60,
+      date: new Date().toISOString(),
+      studyType: 'revisao',
+      workspaceId,
+      workspaceName,
+      notes: `Revisão de flashcard (${durationMinutes} min)`,
+    };
+
+    const sessions = this.getSessions();
+    this.saveSessions([fcSession, ...sessions]);
+    return fcSession;
+  },
+
   recordSubtopicQuestions(
     workspaceId: string,
     subjectId: string,

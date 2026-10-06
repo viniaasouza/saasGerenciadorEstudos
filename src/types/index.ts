@@ -1,6 +1,6 @@
 export type SubjectStatus = 'backlog' | 'active' | 'maintenance';
 
-export type StudyType = 'teoria' | 'videoaula' | 'pdf' | 'questoes' | 'simulado' | 'lei_seca' | 'jurisprudencia' | 'discursiva';
+export type StudyType = 'teoria' | 'videoaula' | 'pdf' | 'questoes' | 'simulado' | 'lei_seca' | 'jurisprudencia' | 'discursiva' | 'revisao' | 'flashcards';
 
 export interface ConcursoInfo {
   concurso: string;

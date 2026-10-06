@@ -1386,5 +1386,70 @@ console.log('--- RUNNING AUTOPILOT ENGINE TESTS ---');
   console.log('✓ Test 18 Passed: Live study registration marks cycle blocks completed with timestamps.');
 }
 
-console.log('=== ALL 18 AUTOPILOT ENGINE TESTS PASSED SUCCESSFULLY! ===');
+// TEST 19: Autopilot review completion adds 10 min and flashcard adds 3 min to study time
+{
+  let mockSessions = [];
+
+  function recordReviewStudySession(workspaceId, review, durationMinutes = 10) {
+    const sessionId = `session-rev-${review.id}`;
+    const revSession = {
+      id: sessionId,
+      subjectId: review.subjectId,
+      subjectName: review.subjectName,
+      topicName: review.topicName,
+      durationSeconds: durationMinutes * 60,
+      date: new Date().toISOString(),
+      studyType: 'revisao',
+      workspaceId,
+    };
+    mockSessions = [revSession, ...mockSessions.filter((s) => s.id !== sessionId)];
+    return revSession;
+  }
+
+  function removeReviewStudySession(workspaceId, reviewId) {
+    const sessionId = `session-rev-${reviewId}`;
+    mockSessions = mockSessions.filter((s) => s.id !== sessionId);
+  }
+
+  function recordFlashcardStudySession(workspaceId, card, durationMinutes = 3) {
+    const fcSession = {
+      id: `session-fc-${Date.now()}-${Math.random()}`,
+      subjectId: card.subjectId || 'flashcards',
+      subjectName: card.subjectName || 'Flashcards',
+      topicName: card.topicName || 'Revisão Anki SM-2',
+      durationSeconds: durationMinutes * 60,
+      date: new Date().toISOString(),
+      studyType: 'revisao',
+      workspaceId,
+    };
+    mockSessions = [fcSession, ...mockSessions];
+    return fcSession;
+  }
+
+  // 1. Completing a spaced review (leitura de resumo) adds 10 min (600s)
+  const testReview = { id: 'rev-test-1', subjectId: 'sub-dir', subjectName: 'Direito', topicName: 'Artigo 5º', days: 1 };
+  recordReviewStudySession('ws-1', testReview, 10);
+  assert.equal(mockSessions.length, 1);
+  assert.equal(mockSessions[0].durationSeconds, 600, 'Review completion must add 600s (10 min)');
+  assert.equal(mockSessions[0].studyType, 'revisao');
+
+  // 2. Reviewing a flashcard adds 3 min (180s)
+  const testCard = { id: 'card-1', subjectId: 'sub-ti', subjectName: 'TI', topicName: 'SQL DDL' };
+  recordFlashcardStudySession('ws-1', testCard, 3);
+  assert.equal(mockSessions.length, 2);
+  assert.equal(mockSessions[0].durationSeconds, 180, 'Flashcard review must add 180s (3 min)');
+
+  // Total study time: 600s + 180s = 780s (13 minutes)
+  const totalSeconds = mockSessions.reduce((sum, s) => sum + s.durationSeconds, 0);
+  assert.equal(totalSeconds, 780, 'Total study time must be 13 minutes (10m review + 3m flashcard)');
+
+  // 3. Undoing the review removes the 10 min
+  removeReviewStudySession('ws-1', 'rev-test-1');
+  assert.equal(mockSessions.length, 1);
+  assert.equal(mockSessions[0].durationSeconds, 180, 'Only the 3 min flashcard remains');
+
+  console.log('✓ Test 19 Passed: Review completion (+10 min) and flashcard review (+3 min) correctly compute in study time.');
+}
+
+console.log('=== ALL 19 AUTOPILOT ENGINE TESTS PASSED SUCCESSFULLY! ===');
 

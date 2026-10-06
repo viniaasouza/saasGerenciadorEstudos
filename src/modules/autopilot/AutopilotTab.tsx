@@ -226,8 +226,11 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
     let justCompleted = false;
     let justUndone = false;
     let revTopicName = '';
+    let targetReview: SpacedReview | undefined;
+
     const updated = revisoes.map((r) => {
       if (r.id === reviewId) {
+        targetReview = r;
         const nextDone = !r.done;
         if (nextDone) {
           justCompleted = true;
@@ -246,13 +249,18 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
     });
     db.saveRevisoes(activeWorkspaceId, updated);
     setRevisoes(updated);
-    if (justCompleted) {
+
+    if (justCompleted && targetReview) {
+      db.recordReviewStudySession(activeWorkspaceId, targetReview, 10);
       triggerXpAward('review_completed', XP_CONFIG.REVIEW_COMPLETED, `Revisão concluída: ${revTopicName}`);
-      showToast(`✓ Revisão concluída! +${XP_CONFIG.REVIEW_COMPLETED} XP!`);
-    } else if (justUndone) {
+      showToast(`✓ Leitura de resumo concluída! +10 min adicionados ao tempo de estudo (+${XP_CONFIG.REVIEW_COMPLETED} XP)`);
+    } else if (justUndone && targetReview) {
+      db.removeReviewStudySession(activeWorkspaceId, reviewId);
       triggerXpAward('review_completed', -XP_CONFIG.REVIEW_COMPLETED, `Revisão desfeita: ${revTopicName}`);
-      showToast(`Revisão desfeita (-${XP_CONFIG.REVIEW_COMPLETED} XP)`);
+      showToast(`Revisão desfeita (-10 min, -${XP_CONFIG.REVIEW_COMPLETED} XP)`);
     }
+
+    loadWorkspaceData();
     if (onRefreshStats) onRefreshStats();
   };
 
@@ -664,7 +672,7 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
                     {dueFlashcards.length} flashcard{dueFlashcards.length > 1 ? 's' : ''} para revisar no SM-2
                   </div>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                    Repetição espaçada algorítmica ativa hoje.
+                    Repetição espaçada algorítmica (+3 min por card adicionados ao tempo de estudo).
                   </div>
                 </div>
               </div>
@@ -685,7 +693,7 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
                 }}
               >
                 <Brain size={16} />
-                Revisar {dueFlashcards.length} Flashcard{dueFlashcards.length > 1 ? 's' : ''} (+10 XP/card)
+                Revisar {dueFlashcards.length} Flashcard{dueFlashcards.length > 1 ? 's' : ''} (+3 min/card • +10 XP)
               </button>
             </div>
           )}
@@ -833,6 +841,19 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
                         >
                           {rev.days === 1 ? 'D+1 (24h)' : `D+${rev.days}`}
                         </span>
+                        <span
+                          style={{
+                            marginLeft: '6px',
+                            fontSize: '0.7rem',
+                            fontWeight: 700,
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                            color: 'var(--color-success)',
+                          }}
+                        >
+                          +10 min
+                        </span>
                       </div>
                     </div>
 
@@ -847,7 +868,7 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
                         color: rev.done ? 'var(--text-muted)' : '#ffffff',
                       }}
                     >
-                      {rev.done ? 'Desfazer' : '✓ Concluir (+30 XP)'}
+                      {rev.done ? 'Desfazer (-10 min)' : '✓ Concluir (+10 min • +30 XP)'}
                     </button>
                   </div>
                 );
@@ -1537,6 +1558,10 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
               const key = `concurso_estudos_fc_reviewed_${activeWorkspaceId}_${getLocalDateString()}`;
               localStorage.setItem(key, String(nextCount));
             }
+
+            // Registra 3 minutos (180s) de tempo de estudo por flashcard revisado
+            db.recordFlashcardStudySession(activeWorkspaceId, card, 3);
+
             triggerXpAward('flashcard_reviewed', XP_CONFIG.FLASHCARD_REVIEWED, 'Flashcard revisado (SM-2)');
           }}
           onClose={() => {

@@ -41,9 +41,19 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({ activeWorkspaceId, onSta
 
   const handleToggleDone = (id: string) => {
     const todayIso = new Date().toISOString();
+    let justCompleted = false;
+    let justUndone = false;
+    let targetReview: SpacedReview | undefined;
+
     const updated = revisoes.map((r) => {
       if (r.id === id) {
+        targetReview = r;
         const nextDone = !r.done;
+        if (nextDone) {
+          justCompleted = true;
+        } else {
+          justUndone = true;
+        }
         return {
           ...r,
           done: nextDone,
@@ -53,6 +63,12 @@ export const ReviewsTab: React.FC<ReviewsTabProps> = ({ activeWorkspaceId, onSta
       return r;
     });
     handleSaveReviews(updated);
+
+    if (justCompleted && targetReview) {
+      db.recordReviewStudySession(activeWorkspaceId, targetReview, 10);
+    } else if (justUndone && targetReview) {
+      db.removeReviewStudySession(activeWorkspaceId, id);
+    }
   };
 
   const handleDelete = (id: string) => {
