@@ -4,7 +4,7 @@ import type { Subject, StudySession, StudyType, SpacedReview, QuestionSession, R
 import { buildGranQuestoesUrl } from '../../data/tceGoPreset';
 import { 
   Play, Pause, Square, RotateCcw, Save, X, BookOpen, 
-  ExternalLink, Clock, Edit3, CheckCircle2
+  ExternalLink, Clock, Edit3, CheckCircle2, Trash2
 } from 'lucide-react';
 
 interface TimerTabProps {
@@ -58,6 +58,32 @@ export const TimerTab: React.FC<TimerTabProps> = ({
   const [displaySeconds, setDisplaySeconds] = useState(0);
   const [timeRemaining, setTimeRemaining] = useState(90 * 60);
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [modalDurationMinutes, setModalDurationMinutes] = useState<number>(45);
+  const [liveSuccessMsg, setLiveSuccessMsg] = useState<string | null>(null);
+  const [todaySessions, setTodaySessions] = useState<StudySession[]>([]);
+
+  const loadTodaySessions = useCallback(() => {
+    if (!activeWorkspaceId) return;
+    const now = new Date();
+    const todayYmd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const all = db.getSessions();
+    const filtered = all.filter(
+      (s) => s.workspaceId === activeWorkspaceId && s.date && s.date.startsWith(todayYmd)
+    );
+    setTodaySessions(filtered);
+  }, [activeWorkspaceId]);
+
+  useEffect(() => {
+    loadTodaySessions();
+  }, [loadTodaySessions, activeWorkspaceId]);
+
+  const handleDeleteSession = (sessionId: string) => {
+    if (window.confirm('Deseja realmente excluir este registro de estudo?')) {
+      db.deleteSession(sessionId);
+      loadTodaySessions();
+      onSessionSaved();
+    }
+  };
 
   // Manual Entry Form States
   const todayStr = new Date().toISOString().split('T')[0];
@@ -71,7 +97,7 @@ export const TimerTab: React.FC<TimerTabProps> = ({
   const [manualAcertos, setManualAcertos] = useState<number | ''>('');
   const [manualErros, setManualErros] = useState<number | ''>('');
   const [manualNotes, setManualNotes] = useState('');
-  const [manualScheduledIntervals, setManualScheduledIntervals] = useState<number[]>([7]);
+  const [manualScheduledIntervals, setManualScheduledIntervals] = useState<number[]>([]);
   const [manualSuccessMsg, setManualSuccessMsg] = useState<string | null>(null);
   const [showManualConfirmModal, setShowManualConfirmModal] = useState(false);
 
@@ -365,38 +391,44 @@ export const TimerTab: React.FC<TimerTabProps> = ({
     setStartTime(null);
     setAccumulatedSeconds(finalSeconds);
     setDisplaySeconds(finalSeconds);
+    setModalDurationMinutes(Math.max(1, Math.round(finalSeconds / 60)));
     db.saveActiveTimer(null);
 
-    if (finalSeconds >= 10) {
+    if (finalSeconds >= 1) {
       setShowSaveModal(true);
     } else {
-      alert('Sessão muito curta para ser registrada (mínimo de 10 segundos).');
+      alert('Inicie o cronômetro antes de finalizar.');
       handleReset();
     }
   };
 
   // 4. Save Session after Live Timer finishes
   const handleSaveSession = () => {
-    const sub = subjects.find((s) => s.id === subjectId);
+    let sub = subjects.find((s) => s.id === subjectId);
+    if (!sub && subjects.length > 0) {
+      sub = subjects[0];
+    }
     const top = sub?.topics.find((t) => t.id === topicId);
     const subtop = top?.subtopics.find((s) => s.id === subtopicId);
-
-    if (!sub) return;
 
     const wsList = db.getWorkspaces();
     const activeWs = wsList.find(w => w.id === activeWorkspaceId);
 
     const isVideoStudy = studyType === 'videoaula' || studyType === 'teoria';
     const isPdfStudy = studyType === 'pdf';
-    const grossSeconds = isVideoStudy ? Math.round(displaySeconds * playbackSpeed) : displaySeconds;
+    const effectiveSeconds = modalDurationMinutes > 0 ? modalDurationMinutes * 60 : displaySeconds;
+    const grossSeconds = isVideoStudy ? Math.round(effectiveSeconds * playbackSpeed) : effectiveSeconds;
+
+    const subjectName = sub?.name || 'Estudo Geral';
+    const finalSubjectId = sub?.id || 'sub-geral';
 
     const newSession: StudySession = {
       id: `session-${Date.now()}`,
-      subjectId: sub.id,
-      subjectName: sub.name,
+      subjectId: finalSubjectId,
+      subjectName,
       topicName: top?.name || 'Tópico Geral',
       subtopicName: subtop?.name,
-      durationSeconds: displaySeconds,
+      durationSeconds: effectiveSeconds,
       date: new Date().toISOString(),
       notes: notes.trim() || undefined,
       studyType,
@@ -420,8 +452,8 @@ export const TimerTab: React.FC<TimerTabProps> = ({
     if (sessionAcertos > 0 || sessionErros > 0) {
       const qSession: QuestionSession = {
         id: `q-session-${Date.now()}`,
-        subjectId: sub.id,
-        subjectName: sub.name,
+        subjectId: finalSubjectId,
+        subjectName,
         topicName: top?.name || 'Geral',
         attempted: sessionAcertos + sessionErros,
         correct: sessionAcertos,
@@ -434,12 +466,8 @@ export const TimerTab: React.FC<TimerTabProps> = ({
       db.saveQuestions([qSession, ...db.getQuestions()]);
     }
 
-    // Schedule Spaced Reviews if selected or if Autopilot D+1 is active
-    const autopilotSettings = db.getAutopilotSettings(activeWorkspaceId);
+    // Schedule Spaced Reviews only if explicitly selected by the user
     const intervalsToSchedule = [...scheduledIntervals];
-    if (autopilotSettings.autoScheduleD1Review && !intervalsToSchedule.includes(1)) {
-      intervalsToSchedule.push(1);
-    }
 
     if (intervalsToSchedule.length > 0) {
       const existingReviews = db.getRevisoes(activeWorkspaceId);
@@ -449,9 +477,9 @@ export const TimerTab: React.FC<TimerTabProps> = ({
         revDate.setDate(revDate.getDate() + days);
         return {
           id: `rev-${Date.now()}-${days}-${Math.random().toString(36).substr(2, 5)}`,
-          subjectId: sub.id,
-          subjectName: sub.name,
-          topicName: subtop?.name || top?.name || sub.name,
+          subjectId: finalSubjectId,
+          subjectName,
+          topicName: subtop?.name || top?.name || subjectName,
           studyDate: today,
           revDate: revDate.toISOString().split('T')[0],
           days,
@@ -463,10 +491,12 @@ export const TimerTab: React.FC<TimerTabProps> = ({
     }
 
     // Automatically mark the current block in the workspace cycle as completed
-    db.markBlockCompleted(activeWorkspaceId, activeBlockId || undefined, sub.id, sub.name);
+    if (sub) {
+      db.markBlockCompleted(activeWorkspaceId, activeBlockId || undefined, sub.id, sub.name);
+    }
 
     // Mark subtopic as completed in workspace subjects tree if specified
-    if (subtop) {
+    if (sub && subtop) {
       const updatedSubjects = subjects.map((s) => {
         if (s.id === sub.id) {
           const updatedTopics = s.topics.map((t) => {
@@ -502,6 +532,11 @@ export const TimerTab: React.FC<TimerTabProps> = ({
       setSubjects(updatedSubjects);
     }
 
+    const finalMins = Math.round(effectiveSeconds / 60);
+    const formattedDuration = `${Math.floor(finalMins / 60) > 0 ? `${Math.floor(finalMins / 60)}h ` : ''}${finalMins % 60}min`;
+    setLiveSuccessMsg(`Sessão de ${formattedDuration} em "${subjectName}" registrada com sucesso!`);
+    setTimeout(() => setLiveSuccessMsg(null), 6000);
+
     // Reset UI
     setShowSaveModal(false);
     setNotes('');
@@ -514,6 +549,7 @@ export const TimerTab: React.FC<TimerTabProps> = ({
     setScheduledIntervals([]);
     setStudyType('teoria');
     handleReset();
+    loadTodaySessions();
     onSessionSaved();
     clearSelectedSubject();
   };
@@ -609,12 +645,8 @@ export const TimerTab: React.FC<TimerTabProps> = ({
       db.saveQuestions([qSession, ...db.getQuestions()]);
     }
 
-    // Schedule Spaced Reviews if selected or if Autopilot D+1 is active
-    const autopilotSettings = db.getAutopilotSettings(activeWorkspaceId);
+    // Schedule Spaced Reviews if explicitly selected by the user
     const intervalsToSchedule = [...manualScheduledIntervals];
-    if (autopilotSettings.autoScheduleD1Review && !intervalsToSchedule.includes(1)) {
-      intervalsToSchedule.push(1);
-    }
 
     if (intervalsToSchedule.length > 0) {
       const existingReviews = db.getRevisoes(activeWorkspaceId);
@@ -698,12 +730,14 @@ export const TimerTab: React.FC<TimerTabProps> = ({
     setManualVideoBlock('');
     setManualPdfLesson('');
     setManualPdfPages('');
+    loadTodaySessions();
     onSessionSaved();
 
     setTimeout(() => {
       manualSubmitContainerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }, 50);
   }, [
+    loadTodaySessions,
     manualHours,
     manualMinutes,
     manualSubjectId,
@@ -851,7 +885,6 @@ export const TimerTab: React.FC<TimerTabProps> = ({
                   <select
                     value={subjectId}
                     onChange={(e) => handleSubjectChange(e.target.value)}
-                    disabled={isActive}
                     style={{
                       padding: '0.8rem',
                       borderRadius: '8px',
@@ -874,7 +907,7 @@ export const TimerTab: React.FC<TimerTabProps> = ({
                   <select
                     value={topicId}
                     onChange={(e) => handleTopicChange(e.target.value)}
-                    disabled={isActive || activeTopics.length === 0}
+                    disabled={activeTopics.length === 0}
                     style={{
                       padding: '0.8rem',
                       borderRadius: '8px',
@@ -897,7 +930,7 @@ export const TimerTab: React.FC<TimerTabProps> = ({
                   <select
                     value={subtopicId}
                     onChange={(e) => setSubtopicId(e.target.value)}
-                    disabled={isActive || activeSubtopics.length === 0}
+                    disabled={activeSubtopics.length === 0}
                     style={{
                       padding: '0.8rem',
                       borderRadius: '8px',
@@ -977,7 +1010,6 @@ export const TimerTab: React.FC<TimerTabProps> = ({
                   <select
                     value={studyType}
                     onChange={(e) => setStudyType(e.target.value as StudyType)}
-                    disabled={isActive}
                     style={{
                       padding: '0.8rem',
                       borderRadius: '8px',
@@ -1095,6 +1127,39 @@ export const TimerTab: React.FC<TimerTabProps> = ({
 
               {/* Right Column: Timer Display & Controls */}
               <div className="placeholder-card card-secondary" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '2rem', padding: '2rem' }}>
+                {liveSuccessMsg && (
+                  <div
+                    role="alert"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      padding: '12px 18px',
+                      borderRadius: '12px',
+                      backgroundColor: 'rgba(34, 197, 94, 0.12)',
+                      border: '1.5px solid #22c55e',
+                      color: 'var(--text-title)',
+                      boxShadow: '0 4px 16px rgba(34, 197, 94, 0.2)',
+                      animation: 'fadeInTab 0.2s ease-out',
+                      width: '100%',
+                      maxWidth: '420px',
+                      marginBottom: '-10px',
+                    }}
+                  >
+                    <CheckCircle2 size={22} color="#22c55e" style={{ flexShrink: 0 }} />
+                    <div style={{ flex: 1, fontSize: '0.88rem', fontWeight: 700 }}>
+                      {liveSuccessMsg}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setLiveSuccessMsg(null)}
+                      style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '2px' }}
+                      title="Fechar"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                )}
                 <div style={{ textAlign: 'center' }}>
                   <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 'bold' }}>
                     {timerMode === 'countdown' ? 'Tempo Restante' : 'Tempo Líquido Estudado'}
@@ -1460,7 +1525,7 @@ export const TimerTab: React.FC<TimerTabProps> = ({
                 🔁 Agendar Revisão Espaçada a partir desta data
               </label>
               <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                {[7, 15, 21, 30].map((days) => (
+                {[1, 7, 15, 21, 30].map((days) => (
                   <button
                     type="button"
                     key={days}
@@ -1476,7 +1541,7 @@ export const TimerTab: React.FC<TimerTabProps> = ({
                       color: manualScheduledIntervals.includes(days) ? '#ffffff' : 'inherit'
                     }}
                   >
-                    {days} dias {manualScheduledIntervals.includes(days) ? '✓' : ''}
+                    {days === 1 ? '1 dia (24h)' : `${days} dias`} {manualScheduledIntervals.includes(days) ? '✓' : ''}
                   </button>
                 ))}
               </div>
@@ -1631,19 +1696,89 @@ export const TimerTab: React.FC<TimerTabProps> = ({
               <button onClick={() => setShowSaveModal(false)} style={{ color: 'var(--text-muted)' }}><X size={20} /></button>
             </div>
 
-            <div style={{ fontSize: '0.95rem', color: 'var(--text-main)' }}>
-              <div style={{
-                backgroundColor: 'var(--bg-element)',
-                padding: '1rem',
-                borderRadius: '8px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '0.4rem'
-              }}>
-                <div><strong>Matéria:</strong> {subjects.find(s => s.id === subjectId)?.name}</div>
-                <div><strong>Tópico:</strong> {activeTopics.find(t => t.id === topicId)?.name || 'Geral'}</div>
-                {subtopicId && <div><strong>Subtópico:</strong> {activeSubtopics.find(s => s.id === subtopicId)?.name}</div>}
-                <div><strong>Tempo Líquido:</strong> {formatTime(displaySeconds)}</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '10px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-title)' }}>Disciplina</label>
+                  <select
+                    value={subjectId}
+                    onChange={(e) => handleSubjectChange(e.target.value)}
+                    style={{
+                      padding: '0.65rem',
+                      borderRadius: '8px',
+                      border: '1px solid var(--border-color)',
+                      backgroundColor: 'var(--bg-element)',
+                      color: 'var(--text-title)',
+                      fontWeight: 600,
+                      fontSize: '0.85rem'
+                    }}
+                  >
+                    {subjects.map((sub) => (
+                      <option key={sub.id} value={sub.id}>{sub.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-title)' }}>Duração (Minutos)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={modalDurationMinutes}
+                    onChange={(e) => setModalDurationMinutes(Math.max(1, parseInt(e.target.value) || 1))}
+                    style={{
+                      padding: '0.65rem',
+                      borderRadius: '8px',
+                      border: '1px solid var(--border-color)',
+                      backgroundColor: 'var(--bg-element)',
+                      color: 'var(--text-title)',
+                      fontWeight: 700,
+                      fontSize: '0.85rem'
+                    }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-title)' }}>Tópico</label>
+                  <select
+                    value={topicId}
+                    onChange={(e) => handleTopicChange(e.target.value)}
+                    style={{
+                      padding: '0.65rem',
+                      borderRadius: '8px',
+                      border: '1px solid var(--border-color)',
+                      backgroundColor: 'var(--bg-element)',
+                      color: 'var(--text-title)',
+                      fontSize: '0.85rem'
+                    }}
+                  >
+                    <option value="">-- Tópico Geral --</option>
+                    {activeTopics.map((top) => (
+                      <option key={top.id} value={top.id}>{top.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-title)' }}>Subtópico</label>
+                  <select
+                    value={subtopicId}
+                    onChange={(e) => setSubtopicId(e.target.value)}
+                    style={{
+                      padding: '0.65rem',
+                      borderRadius: '8px',
+                      border: '1px solid var(--border-color)',
+                      backgroundColor: 'var(--bg-element)',
+                      color: 'var(--text-title)',
+                      fontSize: '0.85rem'
+                    }}
+                  >
+                    <option value="">-- Opcional --</option>
+                    {activeSubtopics.map((st) => (
+                      <option key={st.id} value={st.id}>{st.name}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -1841,7 +1976,7 @@ export const TimerTab: React.FC<TimerTabProps> = ({
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
               <label style={{ fontSize: '0.85rem', fontWeight: 'bold', color: 'var(--text-title)' }}>Agendar Revisão Espaçada</label>
               <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                {[7, 15, 21, 30].map((days) => (
+                {[1, 7, 15, 21, 30].map((days) => (
                   <button
                     type="button"
                     key={days}
@@ -1857,7 +1992,7 @@ export const TimerTab: React.FC<TimerTabProps> = ({
                       color: scheduledIntervals.includes(days) ? '#ffffff' : 'inherit'
                     }}
                   >
-                    {days} dias {scheduledIntervals.includes(days) ? '✓' : ''}
+                    {days === 1 ? '1 dia (24h)' : `${days} dias`} {scheduledIntervals.includes(days) ? '✓' : ''}
                   </button>
                 ))}
               </div>
@@ -2127,6 +2262,94 @@ export const TimerTab: React.FC<TimerTabProps> = ({
           </div>
         );
       })()}
+
+      {/* SESSÕES REGISTRADAS HOJE NO CICLO */}
+      <div className="card-primary" style={{ marginTop: '2.5rem', borderRadius: '16px', padding: '1.5rem', border: '1px solid var(--border-color)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.2rem', flexWrap: 'wrap', gap: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Clock size={20} className="text-primary" />
+            <h3 style={{ fontSize: '1.05rem', fontWeight: 800, margin: 0, color: 'var(--text-title)' }}>
+              Sessões Registradas Hoje no Ciclo ({todaySessions.length})
+            </h3>
+          </div>
+          <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#22c55e', backgroundColor: 'rgba(34, 197, 94, 0.12)', padding: '4px 10px', borderRadius: '8px' }}>
+            Tempo Hoje: {formatTime(todaySessions.reduce((acc, s) => acc + s.durationSeconds, 0))}
+          </span>
+        </div>
+
+        {todaySessions.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-muted)', fontSize: '0.875rem', backgroundColor: 'var(--bg-element)', borderRadius: '12px' }}>
+            Nenhum estudo computado hoje ainda. Ao finalizar o cronômetro ou salvar um estudo manual, seu registro aparecerá imediatamente aqui!
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            {todaySessions.map((sess) => (
+              <div
+                key={sess.id}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '12px 16px',
+                  borderRadius: '12px',
+                  backgroundColor: 'var(--bg-element)',
+                  border: '1px solid var(--border-color)',
+                  gap: '12px',
+                  flexWrap: 'wrap'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <span style={{
+                    padding: '4px 10px',
+                    borderRadius: '8px',
+                    fontSize: '0.8rem',
+                    fontWeight: 800,
+                    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                    color: '#3b82f6'
+                  }}>
+                    {formatTime(sess.durationSeconds)}
+                  </span>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: '0.92rem', color: 'var(--text-title)' }}>
+                      {sess.subjectName}
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                      {sess.subtopicName ? `${sess.topicName} • ${sess.subtopicName}` : sess.topicName || 'Estudo Geral'}
+                      {' • '}
+                      <span style={{ textTransform: 'capitalize', fontWeight: 600 }}>{sess.studyType}</span>
+                      {sess.acertos !== undefined && (
+                        <span style={{ marginLeft: '8px', color: '#16a34a', fontWeight: 700 }}>
+                          ({sess.acertos}A / {sess.erros || 0}E)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleDeleteSession(sess.id)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-muted)',
+                    cursor: 'pointer',
+                    padding: '6px',
+                    borderRadius: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'color 0.15s ease'
+                  }}
+                  title="Excluir este registro"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 };

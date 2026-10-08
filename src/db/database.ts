@@ -441,6 +441,11 @@ export const db = {
     }
   },
 
+  deleteSession(sessionId: string): void {
+    const sessions = this.getSessions().filter((s) => s.id !== sessionId);
+    this.saveSessions(sessions);
+  },
+
   getQuestions(): QuestionSession[] {
     const key = this.getUserScopedKey('questions');
     const data = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
@@ -530,7 +535,7 @@ export const db = {
     const defaultSettings: AutopilotSettings = {
       questionsPerBlock: 15,
       theoryDurationMinutes: 60,
-      autoScheduleD1Review: true,
+      autoScheduleD1Review: false,
       banca: 'FCC',
       bancaId: 92,
     };
@@ -592,7 +597,8 @@ export const db = {
     topicId: string,
     subtopicId: string,
     durationSeconds: number = 0,
-    blockId?: string
+    blockId?: string,
+    scheduleD1?: boolean
   ): { updatedSubjects: Subject[]; scheduledReview: SpacedReview | null } {
     if (!workspaceId) return { updatedSubjects: [], scheduledReview: null };
 
@@ -661,8 +667,9 @@ export const db = {
     }
 
     const settings = this.getAutopilotSettings(workspaceId);
+    const shouldScheduleD1 = scheduleD1 !== undefined ? scheduleD1 : settings.autoScheduleD1Review;
     let scheduledReview: SpacedReview | null = null;
-    if (settings.autoScheduleD1Review) {
+    if (shouldScheduleD1) {
       const fullTopicName = matchedSubtopicName
         ? `${matchedTopicName} - ${matchedSubtopicName}`
         : matchedTopicName;

@@ -102,6 +102,7 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
 
   // Flashcards review modal & daily count tracking
   const [isReviewModalOpen, setIsReviewModalOpen] = useState(false);
+  const [scheduleD1Tasks, setScheduleD1Tasks] = useState<{ [taskId: string]: boolean }>({});
   const [reviewedFlashcardsToday, setReviewedFlashcardsToday] = useState<number>(() => {
     if (!activeWorkspaceId) return 0;
     const key = `concurso_estudos_fc_reviewed_${activeWorkspaceId}_${getLocalDateString()}`;
@@ -268,13 +269,15 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
     if (task.theoryCompleted) return;
 
     const duration = task.theoryMinutes * 60;
+    const shouldScheduleD1 = Boolean(scheduleD1Tasks[task.id]);
     const { scheduledReview } = db.completeSubtopicAndAdvance(
       activeWorkspaceId,
       task.subjectId,
       task.topicId,
       task.subtopicId,
       duration,
-      task.blockId
+      task.blockId,
+      shouldScheduleD1
     );
 
     triggerXpAward(
@@ -1186,6 +1189,43 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
                           <Play size={14} />
                           Iniciar no Cronômetro
                         </button>
+                      )}
+
+                      {!task.theoryCompleted && (
+                        <label
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            fontSize: '0.78rem',
+                            color: 'var(--text-muted)',
+                            cursor: 'pointer',
+                            userSelect: 'none',
+                            padding: '4px 6px',
+                            borderRadius: '6px',
+                            backgroundColor: 'var(--bg-card)',
+                            border: '1px solid var(--border-color)',
+                          }}
+                          title="Se marcado, agenda uma revisão deste tema para amanhã. Desmarcado evita acumular revisões nos blocos picados."
+                        >
+                          <input
+                            type="checkbox"
+                            checked={Boolean(scheduleD1Tasks[task.id])}
+                            onChange={(e) =>
+                              setScheduleD1Tasks((prev) => ({
+                                ...prev,
+                                [task.id]: e.target.checked,
+                              }))
+                            }
+                            style={{
+                              width: '15px',
+                              height: '15px',
+                              cursor: 'pointer',
+                              accentColor: 'var(--color-primary)',
+                            }}
+                          />
+                          <span>Agendar revisão 24h (D+1)</span>
+                        </label>
                       )}
 
                       <button
