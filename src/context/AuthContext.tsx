@@ -168,6 +168,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setSyncStatus('syncing');
       db.migrateGuestData(null, userId);
       db.setCurrentUserId(userId);
+      db.notifyChange();
 
       const { data, error } = await supabase
         .from('user_sync_data')
@@ -176,7 +177,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .maybeSingle();
 
       if (error) {
+        // Table may not be created yet in Supabase or network failed
+        console.warn('Supabase sync notice:', error.message);
         setSyncStatus(navigator.onLine ? 'error' : 'offline');
+        db.notifyChange();
         return;
       }
 

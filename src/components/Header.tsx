@@ -127,6 +127,24 @@ export const Header: React.FC<HeaderProps> = ({
     e.target.value = '';
   };
 
+  const handleManualSync = async () => {
+    const res = await syncWithCloud();
+    if (!res.success) {
+      if (res.message && res.message.toLowerCase().includes('user_sync_data')) {
+        alert(
+          'Aviso do Supabase:\n\n' +
+          'A tabela "user_sync_data" ainda não foi criada no seu projeto do Supabase.\n\n' +
+          'Seus estudos estão 100% salvos no seu computador neste momento.\n\n' +
+          'Para ativar a nuvem, acesse o painel do Supabase -> SQL Editor e execute o comando de criação da tabela.'
+        );
+      } else {
+        alert(res.message || 'Erro ao sincronizar com a nuvem.');
+      }
+    } else {
+      alert('Nuvem Supabase sincronizada com sucesso!');
+    }
+  };
+
   const displayName = user?.name || (typeof localStorage !== 'undefined' ? localStorage.getItem('concurso_estudos_user_name') : null);
 
   return (
@@ -261,7 +279,7 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Supabase Cloud Auto-Sync Status Badge */}
         {user && (
           <button
-            onClick={() => syncWithCloud()}
+            onClick={handleManualSync}
             className="cycle-badge header-sync-badge"
             style={{
               cursor: 'pointer',
