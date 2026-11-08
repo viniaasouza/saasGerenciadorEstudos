@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { X, LogIn, UserPlus, Sparkles, Cloud, Database, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { X, LogIn, UserPlus, Sparkles, Cloud, Database, AlertCircle, CheckCircle2, Download, Settings, ChevronDown, ChevronUp } from 'lucide-react';
+import { saveCustomSupabaseConfig, getSupabaseConfig } from '../lib/supabase';
+import { db } from '../db/database';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -25,6 +27,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showCloudConfig, setShowCloudConfig] = useState(false);
+  const [customUrl, setCustomUrl] = useState(getSupabaseConfig().url);
+  const [customKey, setCustomKey] = useState('');
 
   if (!isOpen) return null;
 
@@ -65,6 +70,38 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleSaveSupabase = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customUrl.startsWith('http') || !customKey) {
+      setErrorMessage('Informe uma URL válida (ex: https://xyz.supabase.co) e a Chave Anon.');
+      return;
+    }
+    const ok = saveCustomSupabaseConfig(customUrl, customKey);
+    if (ok) {
+      window.location.reload();
+    }
+  };
+
+  const handleDownloadBackup = () => {
+    try {
+      const jsonStr = db.exportAllData();
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      const dateStr = new Date().toISOString().split('T')[0];
+      link.href = url;
+      link.download = `backup-ixtude-ai-${dateStr}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      setSuccessMessage('Backup baixado com sucesso! No outro navegador, clique no botão "Restaurar" no cabeçalho.');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setErrorMessage('Erro ao gerar backup: ' + msg);
     }
   };
 
@@ -421,6 +458,111 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             <Sparkles size={14} color="#10b981" />
             <span>Testar como Aluno Demo</span>
           </button>
+        </div>
+
+        {/* Multi-Device Cloud Sync & Backup Helper */}
+        <div
+          style={{
+            marginTop: '1rem',
+            padding: '1rem',
+            borderRadius: '12px',
+            backgroundColor: 'var(--bg-secondary)',
+            border: '1px solid var(--border-color)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '0.65rem',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-title)' }}>
+              Acessar em outro computador ou celular?
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowCloudConfig(!showCloudConfig)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--color-primary)',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '3px',
+              }}
+            >
+              <Settings size={12} />
+              <span>{showCloudConfig ? 'Fechar' : 'Configurar Nuvem'}</span>
+              {showCloudConfig ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            </button>
+          </div>
+
+          <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0, lineHeight: 1.45 }}>
+            {isDemoMode
+              ? 'Atualmente seus estudos estão salvos neste navegador. Para levar seus dados para outro dispositivo agora, baixe o arquivo de backup e use o botão Restaurar no outro aparelho.'
+              : 'Seus estudos estão sendo sincronizados automaticamente com a nuvem do Supabase.'}
+          </p>
+
+          <button
+            type="button"
+            onClick={handleDownloadBackup}
+            className="mock-btn text-muted"
+            style={{
+              width: '100%',
+              padding: '0.55rem',
+              fontSize: '0.8rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              backgroundColor: 'var(--bg-element)',
+            }}
+            title="Exportar todo o progresso (JSON)"
+          >
+            <Download size={14} color="#3b82f6" />
+            <span>Baixar Backup Completo para Levar a Outro Aparelho</span>
+          </button>
+
+          {showCloudConfig && (
+            <form onSubmit={handleSaveSupabase} style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem', paddingTop: '0.5rem', borderTop: '1px dashed var(--border-color)' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-accent)' }}>
+                Conectar Projeto Supabase (Nuvem Gratuita)
+              </div>
+              <input
+                type="url"
+                required
+                value={customUrl}
+                onChange={(e) => setCustomUrl(e.target.value)}
+                placeholder="https://xyz.supabase.co"
+                className="input-field"
+                style={{ width: '100%', fontSize: '0.8rem', padding: '0.45rem' }}
+              />
+              <input
+                type="text"
+                required
+                value={customKey}
+                onChange={(e) => setCustomKey(e.target.value)}
+                placeholder="Sua anon key pública (eyJ...)"
+                className="input-field"
+                style={{ width: '100%', fontSize: '0.8rem', padding: '0.45rem' }}
+              />
+              <button
+                type="submit"
+                className="mock-btn"
+                style={{
+                  width: '100%',
+                  padding: '0.55rem',
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  backgroundColor: 'var(--color-accent)',
+                  color: '#ffffff',
+                }}
+              >
+                Salvar Chaves e Conectar Nuvem
+              </button>
+            </form>
+          )}
         </div>
       </div>
     </div>

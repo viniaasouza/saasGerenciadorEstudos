@@ -1,22 +1,26 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="100%" height="100%">
   <defs>
-    <linearGradient id="grad3" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#4f46e5" />
-      <stop offset="50%" stop-color="#7c3aed" />
-      <stop offset="100%" stop-color="#ec4899" />
+    <linearGradient id="grad4" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6" />
+      <stop offset="50%" stop-color="#8b5cf6" />
+      <stop offset="100%" stop-color="#d946ef" />
     </linearGradient>
   </defs>
   <rect width="128" height="128" rx="28" fill="#0f172a" />
-  <rect x="2" y="2" width="124" height="124" rx="26" fill="none" stroke="url(#grad3)" stroke-width="2" stroke-opacity="0.3" />
-  <!-- Open Book Wings Forming Infinity and Growth -->
-  <g transform="translate(14, 28)">
-    <!-- Left Wing/Page -->
-    <path d="M50 56 C32 20 8 32 6 52 C4 66 18 70 34 62 C44 57 48 54 50 52 Z" fill="url(#grad3)" opacity="0.9" />
-    <!-- Right Wing/Page -->
-    <path d="M50 56 C68 20 92 32 94 52 C96 66 82 70 66 62 C56 57 52 54 50 52 Z" fill="url(#grad3)" />
-    <!-- Central Spine / Core -->
-    <line x1="50" y1="20" x2="50" y2="60" stroke="#f8fafc" stroke-width="4" stroke-linecap="round" />
-    <!-- Rising Sparkle -->
-    <circle cx="50" cy="12" r="5" fill="#facc15" />
+  <rect x="2" y="2" width="124" height="124" rx="26" fill="none" stroke="url(#grad4)" stroke-width="2" stroke-opacity="0.3" />
+  <!-- Minimalist Owl Geometry -->
+  <g transform="translate(24, 20)">
+    <!-- Ears & Brow Line -->
+    <path d="M6 24 L24 8 L40 22 L56 8 L74 24" fill="none" stroke="url(#grad4)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+    <!-- Eyes -->
+    <circle cx="25" cy="40" r="14" fill="none" stroke="url(#grad4)" stroke-width="5" />
+    <circle cx="55" cy="40" r="14" fill="none" stroke="url(#grad4)" stroke-width="5" />
+    <!-- Pupils (Bright Cyan Intelligence) -->
+    <circle cx="25" cy="40" r="5" fill="#38bdf8" />
+    <circle cx="55" cy="40" r="5" fill="#38bdf8" />
+    <!-- Beak -->
+    <polygon points="40,46 34,56 46,56" fill="#facc15" />
+    <!-- Chest / Armor Outline -->
+    <path d="M14 54 C14 74 26 84 40 84 C54 84 66 74 66 54" fill="none" stroke="url(#grad4)" stroke-width="5" stroke-linecap="round" />
   </g>
 </svg>

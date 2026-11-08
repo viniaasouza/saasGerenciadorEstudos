@@ -66,7 +66,27 @@ export const FooterAdBanner: React.FC<FooterAdBannerProps> = ({
     }
   }, [adClient, adSlot, consentAllowed]);
 
-  const hasRealAd = Boolean(adClient && adSlot && !adFailed && consentAllowed);
+  // Fallback observer: if Google AdSense takes too long or returns unfilled, ensure informative banner is visible
+  const [adLoaded, setAdLoaded] = useState(false);
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (adRef.current) {
+        const hasIframe = adRef.current.querySelector('iframe') !== null;
+        const status = adRef.current.getAttribute('data-ad-status');
+        if (hasIframe || (adRef.current.innerHTML.trim().length > 0 && status !== 'unfilled')) {
+          setAdLoaded(true);
+          clearInterval(timer);
+        }
+      }
+    }, 1500);
+    const timeout = setTimeout(() => clearInterval(timer), 6000);
+    return () => {
+      clearInterval(timer);
+      clearTimeout(timeout);
+    };
+  }, [adClient, adSlot]);
+
+  const isAdEligible = Boolean(adClient && adSlot && !adFailed && consentAllowed);
 
   if (isCollapsed) {
     return (
@@ -211,92 +231,98 @@ export const FooterAdBanner: React.FC<FooterAdBannerProps> = ({
       </div>
 
       {/* Main Ad Banner Area */}
-      {hasRealAd ? (
-        <div
-          style={{
-            minHeight: '50px',
-            maxHeight: '90px',
-            width: '100%',
-            overflow: 'hidden',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-        >
-          <ins
-            ref={adRef}
-            className="adsbygoogle"
-            style={{ display: 'block', width: '100%', maxHeight: '90px' }}
-            data-ad-client={adClient}
-            data-ad-slot={adSlot}
-            data-ad-format="horizontal"
-            data-full-width-responsive="true"
-          />
-        </div>
-      ) : (
-        /* Graceful Affiliate / Educational Fallback Banner */
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: '12px',
-            padding: '8px 14px',
-            borderRadius: '10px',
-            backgroundColor: 'var(--bg-element)',
-            border: '1px solid var(--border-color)',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
-            <div
-              style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '8px',
-                backgroundColor: 'rgba(99, 102, 241, 0.15)',
-                color: 'var(--color-primary)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-              }}
-            >
-              <Sparkles size={16} />
-            </div>
-            <div>
-              <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-title)' }}>
-                Gran Cursos Online & Qconcursos • Recursos Oficiais de Estudo
-              </div>
-              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                Turbine sua preparação com videoaulas, PDFs sintetizados e milhares de questões comentadas.
-              </div>
-            </div>
-          </div>
+      <div
+        style={{
+          minHeight: '50px',
+          maxHeight: '90px',
+          width: '100%',
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}
+      >
+        <ins
+          ref={adRef}
+          className="adsbygoogle"
+          style={{ display: (isAdEligible && adLoaded) ? 'block' : 'none', width: '100%', maxHeight: '90px' }}
+          data-ad-client={adClient}
+          data-ad-slot={adSlot}
+          data-ad-format="horizontal"
+          data-full-width-responsive="true"
+        />
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-            <a
-              href="https://questoes.grancursosonline.com.br"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mock-btn"
-              style={{
-                padding: '5px 12px',
-                fontSize: '0.75rem',
-                fontWeight: 700,
-                borderRadius: '8px',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '5px',
-                textDecoration: 'none',
-              }}
-            >
-              <span>Conferir Questões</span>
-              <ExternalLink size={12} />
-            </a>
+        {!adLoaded && (
+          /* Graceful Educational & AdSense Status Fallback Banner */
+          <div
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: '12px',
+              padding: '8px 14px',
+              borderRadius: '10px',
+              backgroundColor: 'var(--bg-element)',
+              border: '1px solid var(--border-color)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
+              <div
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  backgroundColor: 'rgba(99, 102, 241, 0.15)',
+                  color: 'var(--color-primary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
+                <Sparkles size={16} />
+              </div>
+              <div>
+                <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-title)', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <span>Gran Cursos Online & Qconcursos • Parcerias Oficiais</span>
+                  <span style={{ fontSize: '0.65rem', padding: '2px 6px', borderRadius: '4px', backgroundColor: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6', fontWeight: 600 }}>
+                    Google AdSense Ativo (Slot #{adSlot})
+                  </span>
+                </div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                  Turbine sua preparação com videoaulas, PDFs sintetizados e milhares de questões comentadas.
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+              <a
+                href="https://questoes.grancursosonline.com.br"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  backgroundColor: 'var(--color-primary)',
+                  color: '#ffffff',
+                  fontSize: '0.72rem',
+                  fontWeight: 600,
+                  textDecoration: 'none',
+                }}
+              >
+                <span>Acessar Questões</span>
+                <ExternalLink size={11} />
+              </a>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </footer>
   );
 };

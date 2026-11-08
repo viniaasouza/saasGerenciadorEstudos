@@ -1,12 +1,12 @@
 import React from 'react';
 
-interface InfiniteBookLogoProps {
+interface OwlLogoProps {
   size?: number | string;
   className?: string;
   style?: React.CSSProperties;
 }
 
-export const InfiniteBookLogo: React.FC<InfiniteBookLogoProps> = ({
+export const OwlLogo: React.FC<OwlLogoProps> = ({
   size = 32,
   className = '',
   style = {},
@@ -19,13 +19,13 @@ export const InfiniteBookLogo: React.FC<InfiniteBookLogoProps> = ({
       height={size}
       className={className}
       style={{ display: 'inline-block', flexShrink: 0, ...style }}
-      aria-label="ixtude.ai - Livro Infinito"
+      aria-label="ixtude.ai - Coruja da Aprovação"
     >
       <defs>
-        <linearGradient id="infiniteBookGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#4f46e5" />
-          <stop offset="50%" stopColor="#7c3aed" />
-          <stop offset="100%" stopColor="#ec4899" />
+        <linearGradient id="owlLogoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#3b82f6" />
+          <stop offset="50%" stopColor="#8b5cf6" />
+          <stop offset="100%" stopColor="#d946ef" />
         </linearGradient>
       </defs>
       <rect width="128" height="128" rx="28" fill="#0f172a" />
@@ -36,36 +36,41 @@ export const InfiniteBookLogo: React.FC<InfiniteBookLogoProps> = ({
         height="124"
         rx="26"
         fill="none"
-        stroke="url(#infiniteBookGrad)"
+        stroke="url(#owlLogoGrad)"
         strokeWidth="2"
         strokeOpacity="0.3"
       />
-      {/* Open Book Wings Forming Infinity and Growth */}
-      <g transform="translate(14, 28)">
-        {/* Left Wing/Page */}
+      {/* Minimalist Owl Geometry */}
+      <g transform="translate(24, 20)">
+        {/* Ears & Brow Line */}
         <path
-          d="M50 56 C32 20 8 32 6 52 C4 66 18 70 34 62 C44 57 48 54 50 52 Z"
-          fill="url(#infiniteBookGrad)"
-          opacity="0.9"
+          d="M6 24 L24 8 L40 22 L56 8 L74 24"
+          fill="none"
+          stroke="url(#owlLogoGrad)"
+          strokeWidth="6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
         />
-        {/* Right Wing/Page */}
+        {/* Eyes */}
+        <circle cx="25" cy="40" r="14" fill="none" stroke="url(#owlLogoGrad)" strokeWidth="5" />
+        <circle cx="55" cy="40" r="14" fill="none" stroke="url(#owlLogoGrad)" strokeWidth="5" />
+        {/* Pupils (Cyan Intelligence) */}
+        <circle cx="25" cy="40" r="5" fill="#38bdf8" />
+        <circle cx="55" cy="40" r="5" fill="#38bdf8" />
+        {/* Beak */}
+        <polygon points="40,46 34,56 46,56" fill="#facc15" />
+        {/* Chest Outline */}
         <path
-          d="M50 56 C68 20 92 32 94 52 C96 66 82 70 66 62 C56 57 52 54 50 52 Z"
-          fill="url(#infiniteBookGrad)"
-        />
-        {/* Central Spine / Core */}
-        <line
-          x1="50"
-          y1="20"
-          x2="50"
-          y2="60"
-          stroke="#f8fafc"
-          strokeWidth="4"
+          d="M14 54 C14 74 26 84 40 84 C54 84 66 74 66 54"
+          fill="none"
+          stroke="url(#owlLogoGrad)"
+          strokeWidth="5"
           strokeLinecap="round"
         />
-        {/* Rising Sparkle */}
-        <circle cx="50" cy="12" r="5" fill="#facc15" />
       </g>
     </svg>
   );
 };
+
+// Backward-compatible alias for InfiniteBookLogo
+export const InfiniteBookLogo = OwlLogo;
