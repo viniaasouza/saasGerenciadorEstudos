@@ -108,12 +108,47 @@ export const db = {
   getWorkspaces(): CicloWorkspace[] {
     const key = this.getUserScopedKey('workspaces');
     const data = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
-    if (!data) return [];
-    try {
-      return JSON.parse(data);
-    } catch {
-      return [];
+    let ws: CicloWorkspace[] = [];
+    if (data) {
+      try {
+        ws = JSON.parse(data);
+      } catch {
+        ws = [];
+      }
     }
+
+    // Auto-recovery safeguard (Zero Data Loss):
+    // If the current user has 0 workspaces, scan for ANY previous workspaces in localStorage
+    // (from guest, demo student, or legacy local user keys) and automatically migrate them!
+    if (ws.length === 0 && typeof localStorage !== 'undefined') {
+      const candidates: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.endsWith('workspaces') && k !== key) {
+          candidates.push(k);
+        }
+      }
+
+      for (const cand of candidates) {
+        const candData = localStorage.getItem(cand);
+        if (candData) {
+          try {
+            const parsed = JSON.parse(candData);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              const uid = this.getCurrentUserId();
+              if (uid) {
+                this.migrateGuestData(null, uid);
+                const reloaded = localStorage.getItem(key);
+                if (reloaded) return JSON.parse(reloaded);
+              }
+              return parsed;
+            }
+          } catch {}
+        }
+      }
+    }
+
+    return ws;
   },
 
   saveWorkspaces(workspaces: CicloWorkspace[]): void {
@@ -126,7 +161,21 @@ export const db = {
 
   getActiveWorkspaceId(): string | null {
     const key = this.getUserScopedKey('active_workspace_id');
-    return typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
+    let id = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
+    if (!id && typeof localStorage !== 'undefined') {
+      // Look for any candidate active_workspace_id from previous session
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.endsWith('active_workspace_id') && k !== key) {
+          id = localStorage.getItem(k);
+          if (id) {
+            localStorage.setItem(key, id);
+            break;
+          }
+        }
+      }
+    }
+    return id;
   },
 
   setActiveWorkspaceId(id: string): void {
@@ -1317,98 +1366,112 @@ export const db = {
   },
 
   // GUEST ACCOUNT MIGRATION ON LOGIN (Zero Data Loss)
-  migrateGuestData(_guestUserId: string | null = null, targetUserId: string): void {
+  migrateGuestData(sourceUserId: string | null = null, targetUserId: string): void {
     if (!targetUserId || typeof localStorage === 'undefined') return;
 
     try {
-      const prefix = 'concurso_estudos_';
       const userPrefix = `concurso_estudos_${targetUserId}_`;
-      const guestKeys: string[] = [];
-
-      const guestKeyPatterns = [
-        'concurso_estudos_workspaces',
-        'concurso_estudos_active_workspace_id',
-        'concurso_estudos_sessions',
-        'concurso_estudos_questions',
-        'concurso_estudos_gamification_profile',
-        'concurso_estudos_active_timer',
+      const knownEntityNames = [
+        'workspaces',
+        'active_workspace_id',
+        'sessions',
+        'questions',
+        'gamification_profile',
+        'active_timer',
       ];
+
+      // Identify all keys in localStorage that belong to a guest or any previous local user (not targetUser)
+      const keysToMigrate: { originalKey: string; normalizedSuffix: string }[] = [];
 
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
-        if (!k || !k.startsWith(prefix) || k.includes(`_${targetUserId}_`)) continue;
+        if (!k || !k.startsWith('concurso_estudos_') || k.startsWith(userPrefix)) continue;
 
-        const isExactGuestBase = guestKeyPatterns.includes(k);
-        const isGuestDynamic =
-          k.startsWith('concurso_estudos_subjects_') ||
-          k.startsWith('concurso_estudos_cycle_config_') ||
-          k.startsWith('concurso_estudos_cycle_blocks_') ||
-          k.startsWith('concurso_estudos_cycle_week_') ||
-          k.startsWith('concurso_estudos_concurso_info_') ||
-          k.startsWith('concurso_estudos_revisoes_') ||
-          k.startsWith('concurso_estudos_flashcards_') ||
-          k.startsWith('concurso_estudos_autopilot_settings_');
+        // Strip 'concurso_estudos_' prefix
+        const remaining = k.substring('concurso_estudos_'.length);
 
-        if (isExactGuestBase || isGuestDynamic) {
-          guestKeys.push(k);
+        // If remaining starts with a user id followed by '_', normalize it
+        // Example: 'usr-demo-student_workspaces' -> 'workspaces'
+        // Example: 'usr-demo-student_subjects_ws-123' -> 'subjects_ws-123'
+        // Example: 'workspaces' -> 'workspaces'
+        const parts = remaining.split('_');
+        let normalizedSuffix = remaining;
+
+        if (parts.length >= 2 && (parts[0].startsWith('usr-') || parts[0] === 'guest' || (sourceUserId && parts[0] === sourceUserId))) {
+          normalizedSuffix = remaining.substring(parts[0].length + 1);
+        }
+
+        const isKnownBase = knownEntityNames.includes(normalizedSuffix);
+        const isDynamic =
+          normalizedSuffix.startsWith('subjects_') ||
+          normalizedSuffix.startsWith('cycle_config_') ||
+          normalizedSuffix.startsWith('cycle_blocks_') ||
+          normalizedSuffix.startsWith('cycle_week_') ||
+          normalizedSuffix.startsWith('concurso_info_') ||
+          normalizedSuffix.startsWith('revisoes_') ||
+          normalizedSuffix.startsWith('flashcards_') ||
+          normalizedSuffix.startsWith('autopilot_settings_');
+
+        if (isKnownBase || isDynamic) {
+          keysToMigrate.push({ originalKey: k, normalizedSuffix });
         }
       }
 
-      guestKeys.forEach((guestKey) => {
-        const val = localStorage.getItem(guestKey);
+      keysToMigrate.forEach(({ originalKey, normalizedSuffix }) => {
+        const val = localStorage.getItem(originalKey);
         if (val === null) return;
 
-        const suffix = guestKey.substring(prefix.length);
-        const userKey = `${userPrefix}${suffix}`;
-        const existingUserVal = localStorage.getItem(userKey);
+        const targetKey = `${userPrefix}${normalizedSuffix}`;
+        const existingTargetVal = localStorage.getItem(targetKey);
 
-        if (!existingUserVal) {
-          localStorage.setItem(userKey, val);
+        if (!existingTargetVal) {
+          localStorage.setItem(targetKey, val);
         } else {
           try {
-            if (suffix === 'workspaces') {
-              const guestWs: CicloWorkspace[] = JSON.parse(val);
-              const userWs: CicloWorkspace[] = JSON.parse(existingUserVal);
+            if (normalizedSuffix === 'workspaces') {
+              const srcWs: CicloWorkspace[] = JSON.parse(val);
+              const tgtWs: CicloWorkspace[] = JSON.parse(existingTargetVal);
               const wsMap = new Map<string, CicloWorkspace>();
-              userWs.forEach((w) => wsMap.set(w.id, w));
-              guestWs.forEach((w) => {
-                if (!wsMap.has(w.id)) wsMap.set(w.id, w);
+              // If target has only default empty workspace 'Meu Concurso' and src has real workspaces, prefer src!
+              srcWs.forEach((w) => wsMap.set(w.id, w));
+              tgtWs.forEach((w) => {
+                if (w.name !== 'Meu Concurso' || wsMap.size === 0) wsMap.set(w.id, w);
               });
               let merged = Array.from(wsMap.values());
               const genuine = merged.filter((w) => w.name !== 'Meu Concurso');
               if (genuine.length > 0) merged = genuine;
-              localStorage.setItem(userKey, JSON.stringify(merged));
-            } else if (suffix === 'sessions') {
-              const guestSess: StudySession[] = JSON.parse(val);
-              const userSess: StudySession[] = JSON.parse(existingUserVal);
+              localStorage.setItem(targetKey, JSON.stringify(merged));
+            } else if (normalizedSuffix === 'sessions') {
+              const srcSess: StudySession[] = JSON.parse(val);
+              const tgtSess: StudySession[] = JSON.parse(existingTargetVal);
               const sessMap = new Map<string, StudySession>();
-              userSess.forEach((s) => sessMap.set(s.id, s));
-              guestSess.forEach((s) => sessMap.set(s.id, s));
+              tgtSess.forEach((s) => sessMap.set(s.id, s));
+              srcSess.forEach((s) => sessMap.set(s.id, s));
               const merged = Array.from(sessMap.values()).sort(
                 (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
               );
-              localStorage.setItem(userKey, JSON.stringify(merged));
-            } else if (suffix === 'questions') {
-              const guestQ: QuestionSession[] = JSON.parse(val);
-              const userQ: QuestionSession[] = JSON.parse(existingUserVal);
+              localStorage.setItem(targetKey, JSON.stringify(merged));
+            } else if (normalizedSuffix === 'questions') {
+              const srcQ: QuestionSession[] = JSON.parse(val);
+              const tgtQ: QuestionSession[] = JSON.parse(existingTargetVal);
               const qMap = new Map<string, QuestionSession>();
-              userQ.forEach((q) => qMap.set(q.id, q));
-              guestQ.forEach((q) => qMap.set(q.id, q));
+              tgtQ.forEach((q) => qMap.set(q.id, q));
+              srcQ.forEach((q) => qMap.set(q.id, q));
               const merged = Array.from(qMap.values()).sort(
                 (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
               );
-              localStorage.setItem(userKey, JSON.stringify(merged));
-            } else if (suffix === 'gamification_profile') {
-              const guestGam: GamificationProfile = JSON.parse(val);
-              const userGam: GamificationProfile = JSON.parse(existingUserVal);
+              localStorage.setItem(targetKey, JSON.stringify(merged));
+            } else if (normalizedSuffix === 'gamification_profile') {
+              const srcGam: GamificationProfile = JSON.parse(val);
+              const tgtGam: GamificationProfile = JSON.parse(existingTargetVal);
               const mergedGam: GamificationProfile = {
-                totalXp: Math.max(guestGam.totalXp || 0, userGam.totalXp || 0),
-                currentStreak: Math.max(guestGam.currentStreak || 0, userGam.currentStreak || 0),
-                longestStreak: Math.max(guestGam.longestStreak || 0, userGam.longestStreak || 0),
-                dailyXp: { ...(userGam.dailyXp || {}), ...(guestGam.dailyXp || {}) },
-                history: [...(userGam.history || []), ...(guestGam.history || [])],
+                totalXp: Math.max(srcGam.totalXp || 0, tgtGam.totalXp || 0),
+                currentStreak: Math.max(srcGam.currentStreak || 0, tgtGam.currentStreak || 0),
+                longestStreak: Math.max(srcGam.longestStreak || 0, tgtGam.longestStreak || 0),
+                dailyXp: { ...(tgtGam.dailyXp || {}), ...(srcGam.dailyXp || {}) },
+                history: [...(tgtGam.history || []), ...(srcGam.history || [])],
               };
-              localStorage.setItem(userKey, JSON.stringify(mergedGam));
+              localStorage.setItem(targetKey, JSON.stringify(mergedGam));
             }
           } catch {
             // Keep existing on parse failure
