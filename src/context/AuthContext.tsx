@@ -764,6 +764,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       setSyncStatus('syncing');
+      db.migrateGuestData(null, user.id);
+      db.setCurrentUserId(user.id);
       const backupJson = db.exportAllData();
       const payload = JSON.parse(backupJson);
 

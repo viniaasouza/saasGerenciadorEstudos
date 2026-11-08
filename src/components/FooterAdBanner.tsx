@@ -105,6 +105,8 @@ export const FooterAdBanner: React.FC<FooterAdBannerProps> = ({
           alignItems: 'center',
           fontSize: '0.7rem',
           color: 'var(--text-muted)',
+          flexShrink: 0,
+          margin: 0,
           transition: 'all 0.2s ease',
         }}
       >
@@ -161,6 +163,8 @@ export const FooterAdBanner: React.FC<FooterAdBannerProps> = ({
         gap: '6px',
         position: 'relative',
         zIndex: 5,
+        flexShrink: 0,
+        margin: 0,
         transition: 'all 0.2s ease',
       }}
     >
