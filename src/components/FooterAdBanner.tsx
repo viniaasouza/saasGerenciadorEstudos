@@ -8,19 +8,55 @@ interface FooterAdBannerProps {
   className?: string;
 }
 
+const DEFAULT_PUB_ID = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_ADSENSE_PUB_ID) || 'ca-pub-9810973652333319';
+const DEFAULT_SLOT_ID = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_ADSENSE_FOOTER_SLOT) || '3416652040';
+const COOKIE_STORAGE_KEY = 'ixtude_cookie_consent';
+
 export const FooterAdBanner: React.FC<FooterAdBannerProps> = ({
-  adClient,
-  adSlot,
+  adClient = DEFAULT_PUB_ID,
+  adSlot = DEFAULT_SLOT_ID,
   onOpenPrivacy,
   className = '',
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [adFailed, setAdFailed] = useState(false);
+  const [consentAllowed, setConsentAllowed] = useState(true);
   const adRef = useRef<HTMLModElement | null>(null);
 
-  // Initialize Google AdSense if script is present and client id is provided
+  // Validate LGPD consent before enabling third-party advertising cookies
   useEffect(() => {
-    if (adClient && adSlot && typeof window !== 'undefined') {
+    const checkConsent = () => {
+      if (typeof localStorage === 'undefined') return true;
+      try {
+        const raw = localStorage.getItem(COOKIE_STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed.status === 'essential_only') {
+            return false;
+          }
+        }
+        return true;
+      } catch {
+        return true;
+      }
+    };
+
+    const allowed = checkConsent();
+    setConsentAllowed(allowed);
+
+    // If storage changes in another component or tab, update consent dynamically
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === COOKIE_STORAGE_KEY) {
+        setConsentAllowed(checkConsent());
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
+  // Initialize Google AdSense if script is present, client id is provided, and LGPD allows
+  useEffect(() => {
+    if (adClient && adSlot && consentAllowed && typeof window !== 'undefined') {
       try {
         // @ts-expect-error Google AdSense global
         (window.adsbygoogle = window.adsbygoogle || []).push({});
@@ -28,9 +64,9 @@ export const FooterAdBanner: React.FC<FooterAdBannerProps> = ({
         setAdFailed(true);
       }
     }
-  }, [adClient, adSlot]);
+  }, [adClient, adSlot, consentAllowed]);
 
-  const hasRealAd = Boolean(adClient && adSlot && !adFailed);
+  const hasRealAd = Boolean(adClient && adSlot && !adFailed && consentAllowed);
 
   if (isCollapsed) {
     return (
@@ -38,6 +74,9 @@ export const FooterAdBanner: React.FC<FooterAdBannerProps> = ({
         className={`footer-ad-container ${className}`}
         style={{
           width: '100%',
+          maxWidth: '100%',
+          boxSizing: 'border-box',
+          overflowX: 'hidden',
           borderTop: '1px solid var(--border-color)',
           backgroundColor: 'var(--bg-card)',
           padding: '4px 16px',
@@ -91,6 +130,9 @@ export const FooterAdBanner: React.FC<FooterAdBannerProps> = ({
       className={`footer-ad-container ${className}`}
       style={{
         width: '100%',
+        maxWidth: '100%',
+        boxSizing: 'border-box',
+        overflowX: 'hidden',
         borderTop: '1px solid var(--border-color)',
         backgroundColor: 'var(--bg-card)',
         padding: '10px 20px',

@@ -104,10 +104,6 @@ function getWeekStartDateTime(d = new Date()) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate() - day, 0, 0, 0, 0);
 }
 
-function getMondayOfWeek(d = new Date()) {
-  return getSundayOfWeek(d);
-}
-
 function getTodayDayName(d = new Date()) {
   return DAYS_ORDER[d.getDay()];
 }
@@ -1411,7 +1407,7 @@ console.log('--- RUNNING AUTOPILOT ENGINE TESTS ---');
     mockSessions = mockSessions.filter((s) => s.id !== sessionId);
   }
 
-  function recordFlashcardStudySession(workspaceId, card, durationSeconds = 75) {
+  function recordFlashcardStudySession(workspaceId, card, durationSeconds = 30) {
     const fcSession = {
       id: `session-fc-${Date.now()}-${Math.random()}`,
       subjectId: card.subjectId || 'flashcards',
@@ -1433,23 +1429,90 @@ console.log('--- RUNNING AUTOPILOT ENGINE TESTS ---');
   assert.equal(mockSessions[0].durationSeconds, 600, 'Review completion must add 600s (10 min)');
   assert.equal(mockSessions[0].studyType, 'revisao');
 
-  // 2. Reviewing a flashcard adds 1m 15s (75s)
+  // 2. Reviewing a flashcard adds 30s (0.5 min)
   const testCard = { id: 'card-1', subjectId: 'sub-ti', subjectName: 'TI', topicName: 'SQL DDL' };
-  recordFlashcardStudySession('ws-1', testCard, 75);
+  recordFlashcardStudySession('ws-1', testCard, 30);
   assert.equal(mockSessions.length, 2);
-  assert.equal(mockSessions[0].durationSeconds, 75, 'Flashcard review must add 75s (1m 15s)');
+  assert.equal(mockSessions[0].durationSeconds, 30, 'Flashcard review must add 30s (0.5 min)');
 
-  // Total study time: 600s + 75s = 675s (11 minutes 15 seconds)
+  // Total study time: 600s + 30s = 630s (10 minutes 30 seconds)
   const totalSeconds = mockSessions.reduce((sum, s) => sum + s.durationSeconds, 0);
-  assert.equal(totalSeconds, 675, 'Total study time must be 11m 15s (10m review + 1m 15s flashcard)');
+  assert.equal(totalSeconds, 630, 'Total study time must be 10m 30s (10m review + 30s flashcard)');
 
   // 3. Undoing the review removes the 10 min
   removeReviewStudySession('ws-1', 'rev-test-1');
   assert.equal(mockSessions.length, 1);
-  assert.equal(mockSessions[0].durationSeconds, 75, 'Only the 1m 15s flashcard remains');
+  assert.equal(mockSessions[0].durationSeconds, 30, 'Only the 30s flashcard remains');
 
-  console.log('✓ Test 19 Passed: Review completion (+10 min) and flashcard review (+1m 15s) correctly compute in study time.');
+  console.log('✓ Test 19 Passed: Review completion (+10 min) and flashcard review (+30s) correctly compute in study time.');
 }
 
-console.log('=== ALL 19 AUTOPILOT ENGINE TESTS PASSED SUCCESSFULLY! ===');
+// ==========================================
+// TEST 20: Timer Liquid Study Time Precision (R6)
+// ==========================================
+{
+  function simulateCountdownEnd(durationMinutes, accumulatedSeconds = 0, startTime = null, now = Date.now()) {
+    const totalTarget = durationMinutes * 60;
+    const finalElapsed = accumulatedSeconds + (startTime ? Math.floor((now - startTime) / 1000) : 0);
+    const actualSeconds = Math.max(finalElapsed, totalTarget);
+    const liquidMinutes = Math.max(1, Math.round(actualSeconds / 60));
+    return {
+      actualSeconds,
+      modalDurationMinutes: liquidMinutes,
+    };
+  }
+
+  function simulateManualFinish(accumulatedSeconds, startTime, isPaused, now = Date.now()) {
+    let finalSeconds = accumulatedSeconds;
+    if (startTime && !isPaused) {
+      finalSeconds += Math.floor((now - startTime) / 1000);
+    }
+    const liquidMinutes = Math.max(1, Math.round(finalSeconds / 60));
+    return {
+      finalSeconds,
+      modalDurationMinutes: liquidMinutes,
+    };
+  }
+
+  function computeSessionDuration(modalDurationMinutes, displaySeconds, studyType, playbackSpeed = 1.0) {
+    const isVideoStudy = studyType === 'videoaula';
+    const effectiveSeconds = modalDurationMinutes > 0 ? modalDurationMinutes * 60 : displaySeconds;
+    const grossSeconds = isVideoStudy ? Math.round(effectiveSeconds * playbackSpeed) : effectiveSeconds;
+    return {
+      effectiveSeconds,
+      grossSeconds,
+    };
+  }
+
+  // 1. 30-minute countdown reaching 0 must result in exactly 30 min (1800s), NOT 45 min (2700s)
+  const countdown30 = simulateCountdownEnd(30, 0, Date.now() - 1800000, Date.now());
+  assert.equal(countdown30.modalDurationMinutes, 30, '30 min countdown must set modalDurationMinutes to 30, never 45');
+  assert.equal(countdown30.actualSeconds, 1800, '30 min countdown must record 1800 actual seconds');
+  const session30 = computeSessionDuration(countdown30.modalDurationMinutes, countdown30.actualSeconds, 'teoria');
+  assert.equal(session30.effectiveSeconds, 1800, 'Effective seconds must be 1800s (30m)');
+  assert.notEqual(session30.effectiveSeconds, 2700, 'Must not inflate to 45 minutes');
+
+  // 2. Early manual finish at 15 minutes (900s)
+  const manual15 = simulateManualFinish(0, Date.now() - 900000, false, Date.now());
+  assert.equal(manual15.modalDurationMinutes, 15, '15 min study must record 15 min');
+  const session15 = computeSessionDuration(manual15.modalDurationMinutes, manual15.finalSeconds, 'questoes');
+  assert.equal(session15.effectiveSeconds, 900, 'Effective seconds must be 900s');
+
+  // 3. User manual override in modal to 25 minutes
+  const overrideSession = computeSessionDuration(25, 1800, 'teoria');
+  assert.equal(overrideSession.effectiveSeconds, 1500, 'User explicit override to 25 min must record 1500s');
+
+  // 4. Theory study must not multiply by playback speed
+  const theorySession = computeSessionDuration(30, 1800, 'teoria', 2.0);
+  assert.equal(theorySession.grossSeconds, 1800, 'Theory study must not apply video playback speed multiplier');
+
+  // 5. Videoaula study correctly applies playback speed to grossDurationSeconds
+  const videoSession = computeSessionDuration(30, 1800, 'videoaula', 1.5);
+  assert.equal(videoSession.effectiveSeconds, 1800, 'Video lesson effective liquid seconds is 1800');
+  assert.equal(videoSession.grossSeconds, 2700, 'Video lesson gross seconds with 1.5x speed is 2700');
+
+  console.log('✓ Test 20 Passed: Timer liquid study time precision (no 45m inflation, exact minutes) verified.');
+}
+
+console.log('=== ALL 20 AUTOPILOT ENGINE TESTS PASSED SUCCESSFULLY! ===');
 

@@ -4,26 +4,11 @@ import { DAYS_ORDER, getSundayOfWeek, getTodayDayName, reallocateIncompleteBlock
 import { awardXp, calculateStreakFromDates } from '../modules/autopilot/gamification';
 import { getLocalDateString, toLocalDateString } from '../modules/autopilot/autopilotEngine';
 
-// Version-tagged automatic storage wipe for port 5174 (estud_ai_clean_v4)
-// Purges any legacy keys in localStorage containing old TCE-GO data or un-scoped cycles
+// Legacy wipe disarmed to preserve existing user data strictly (Zero Data Loss)
 const CLEANUP_KEY = 'estud_ai_clean_v4';
 if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
   try {
     if (!localStorage.getItem(CLEANUP_KEY)) {
-      const keysToRemove: string[] = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (
-          k &&
-          (k.startsWith('concurso_estudos_') ||
-           k.startsWith('estud_ai_fc_') ||
-           k === 'estud_ai_auth_user' ||
-           k.startsWith('estud_ai_clean_'))
-        ) {
-          keysToRemove.push(k);
-        }
-      }
-      keysToRemove.forEach((k) => localStorage.removeItem(k));
       localStorage.setItem(CLEANUP_KEY, 'true');
     }
   } catch {}
@@ -47,9 +32,50 @@ const KEYS = {
   GAMIFICATION: 'concurso_estudos_gamification_profile',
 };
 
+export interface FullBackup {
+  app?: string;
+  version?: number;
+  exportedAt?: string;
+  theme?: string;
+  workspaces?: CicloWorkspace[];
+  activeWorkspaceId?: string | null;
+  sessions?: StudySession[];
+  questions?: QuestionSession[];
+  workspaceData?: Record<string, {
+    subjects?: Subject[];
+    cycleConfig?: StudyCycleConfig | null;
+    cycleBlocks?: StudyBlock[];
+    cycleWeek?: string | null;
+    concursoInfo?: ConcursoInfo | null;
+    revisoes?: SpacedReview[];
+    flashcards?: Flashcard[];
+    autopilotSettings?: AutopilotSettings | null;
+  }>;
+  gamification?: GamificationProfile | null;
+  rawKeys?: Record<string, string>;
+}
+
+type DataChangeListener = () => void;
+const changeListeners = new Set<DataChangeListener>();
+
 let currentUserId: string | null = null;
 
 export const db = {
+  subscribe(listener: DataChangeListener): () => void {
+    changeListeners.add(listener);
+    return () => {
+      changeListeners.delete(listener);
+    };
+  },
+
+  notifyChange(): void {
+    changeListeners.forEach((fn) => {
+      try {
+        fn();
+      } catch {}
+    });
+  },
+
   // MULTI-USER ISOLATION HELPERS
   setCurrentUserId(userId: string | null): void {
     currentUserId = userId;
@@ -82,7 +108,12 @@ export const db = {
   getWorkspaces(): CicloWorkspace[] {
     const key = this.getUserScopedKey('workspaces');
     const data = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
-    return data ? JSON.parse(data) : [];
+    if (!data) return [];
+    try {
+      return JSON.parse(data);
+    } catch {
+      return [];
+    }
   },
 
   saveWorkspaces(workspaces: CicloWorkspace[]): void {
@@ -90,6 +121,7 @@ export const db = {
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(key, JSON.stringify(workspaces));
     }
+    this.notifyChange();
   },
 
   getActiveWorkspaceId(): string | null {
@@ -102,6 +134,7 @@ export const db = {
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(key, id);
     }
+    this.notifyChange();
   },
 
   // WORKSPACE SPECIFIC DATA HELPERS (using workspaceId)
@@ -179,6 +212,7 @@ export const db = {
   saveSubjects(workspaceId: string, subjects: Subject[]): void {
     if (!workspaceId) return;
     localStorage.setItem(KEYS.SUBJECTS(workspaceId), JSON.stringify(subjects));
+    this.notifyChange();
   },
 
   updateSubtopic(
@@ -267,6 +301,7 @@ export const db = {
   saveCycleConfig(workspaceId: string, config: StudyCycleConfig): void {
     if (!workspaceId) return;
     localStorage.setItem(KEYS.CYCLE_CONFIG(workspaceId), JSON.stringify(config));
+    this.notifyChange();
   },
 
   getCycleBlocks(workspaceId: string): StudyBlock[] {
@@ -278,6 +313,7 @@ export const db = {
   saveCycleBlocks(workspaceId: string, blocks: StudyBlock[]): void {
     if (!workspaceId) return;
     localStorage.setItem(KEYS.CYCLE_BLOCKS(workspaceId), JSON.stringify(blocks));
+    this.notifyChange();
   },
 
   getCycleWeek(workspaceId: string): string | null {
@@ -288,6 +324,7 @@ export const db = {
   saveCycleWeek(workspaceId: string, weekSunday: string): void {
     if (!workspaceId) return;
     localStorage.setItem(KEYS.CYCLE_WEEK(workspaceId), weekSunday);
+    this.notifyChange();
   },
 
   /**
@@ -431,7 +468,12 @@ export const db = {
   getSessions(): StudySession[] {
     const key = this.getUserScopedKey('sessions');
     const data = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
-    return data ? JSON.parse(data) : [];
+    if (!data) return [];
+    try {
+      return JSON.parse(data);
+    } catch {
+      return [];
+    }
   },
 
   saveSessions(sessions: StudySession[]): void {
@@ -439,6 +481,7 @@ export const db = {
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(key, JSON.stringify(sessions));
     }
+    this.notifyChange();
   },
 
   deleteSession(sessionId: string): void {
@@ -449,7 +492,12 @@ export const db = {
   getQuestions(): QuestionSession[] {
     const key = this.getUserScopedKey('questions');
     const data = typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
-    return data ? JSON.parse(data) : [];
+    if (!data) return [];
+    try {
+      return JSON.parse(data);
+    } catch {
+      return [];
+    }
   },
 
   saveQuestions(questions: QuestionSession[]): void {
@@ -457,6 +505,7 @@ export const db = {
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(key, JSON.stringify(questions));
     }
+    this.notifyChange();
   },
 
   // CONCURSO INFO HELPERS
@@ -470,6 +519,7 @@ export const db = {
   saveConcursoInfo(workspaceId: string, info: ConcursoInfo): void {
     if (!workspaceId) return;
     localStorage.setItem(KEYS.CONCURSO_INFO(workspaceId), JSON.stringify(info));
+    this.notifyChange();
   },
 
   // SPACED REPETITION REVIEWS HELPERS
@@ -482,6 +532,7 @@ export const db = {
   saveRevisoes(workspaceId: string, revisoes: SpacedReview[]): void {
     if (!workspaceId) return;
     localStorage.setItem(KEYS.REVISOES(workspaceId), JSON.stringify(revisoes));
+    this.notifyChange();
   },
 
   // FLASHCARDS HELPERS
@@ -498,6 +549,7 @@ export const db = {
   saveFlashcards(workspaceId: string, cards: Flashcard[]): void {
     if (!workspaceId) return;
     localStorage.setItem(KEYS.FLASHCARDS(workspaceId), JSON.stringify(cards));
+    this.notifyChange();
   },
 
   getDueFlashcards(workspaceId: string): Flashcard[] {
@@ -553,6 +605,7 @@ export const db = {
   saveAutopilotSettings(workspaceId: string, settings: AutopilotSettings): void {
     if (!workspaceId) return;
     localStorage.setItem(KEYS.AUTOPILOT_SETTINGS(workspaceId), JSON.stringify(settings));
+    this.notifyChange();
   },
 
   scheduleTomorrowReview(
@@ -741,12 +794,12 @@ export const db = {
 
   /**
    * Records study session for completed flashcard review.
-   * Adds fixed average time (default 1 min 15 sec = 75s per card).
+   * Adds fixed average time (default 30s per card).
    */
   recordFlashcardStudySession(
     workspaceId: string,
     card: Flashcard,
-    durationSeconds: number = 75
+    durationSeconds: number = 30
   ): StudySession | null {
     if (!workspaceId || !card) return null;
 
@@ -764,7 +817,7 @@ export const db = {
       studyType: 'revisao',
       workspaceId,
       workspaceName,
-      notes: 'Revisão de flashcard (1m 15s)',
+      notes: 'Revisão de flashcard (30s)',
     };
 
     const sessions = this.getSessions();
@@ -1014,9 +1067,9 @@ export const db = {
       }
     }
 
-    const payload = {
-      app: 'estud.ai',
-      version: 1,
+    const payload: FullBackup = {
+      app: 'ixtude.ai',
+      version: 2,
       exportedAt: new Date().toISOString(),
       theme: theme || 'dark',
       workspaces,
@@ -1024,13 +1077,350 @@ export const db = {
       sessions,
       questions,
       workspaceData,
+      gamification: this.getGamificationProfile(),
       rawKeys,
     };
 
     return JSON.stringify(payload, null, 2);
   },
 
-  importAllData(jsonStr: string): { success: boolean; message: string } {
+  // THREE-WAY NON-DESTRUCTIVE MERGE ENGINE (Zero Data Loss)
+  mergeData(localData: FullBackup, cloudData: FullBackup): FullBackup {
+    if (!cloudData || typeof cloudData !== 'object') {
+      return localData || { workspaces: [], sessions: [], questions: [], workspaceData: {} };
+    }
+    if (!localData || typeof localData !== 'object') {
+      return cloudData;
+    }
+
+    // 1. Sessions: Union deduplicated by ID, sorted chronologically
+    const sessionMap = new Map<string, StudySession>();
+    (cloudData.sessions || []).forEach((s) => {
+      if (s && s.id) sessionMap.set(s.id, s);
+    });
+    (localData.sessions || []).forEach((s) => {
+      if (s && s.id) sessionMap.set(s.id, s);
+    });
+    const mergedSessions = Array.from(sessionMap.values()).sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+
+    // 2. Questions: Union deduplicated by ID, sorted chronologically
+    const questionMap = new Map<string, QuestionSession>();
+    (cloudData.questions || []).forEach((q) => {
+      if (q && q.id) questionMap.set(q.id, q);
+    });
+    (localData.questions || []).forEach((q) => {
+      if (q && q.id) questionMap.set(q.id, q);
+    });
+    const mergedQuestions = Array.from(questionMap.values()).sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+
+    // 3. Workspaces: Preserve all unique workspaces; prune blank auto-generated "Meu Concurso" if genuine exist
+    const wsMap = new Map<string, CicloWorkspace>();
+    const allWs = [...(cloudData.workspaces || []), ...(localData.workspaces || [])];
+    allWs.forEach((w) => {
+      if (w && w.id) wsMap.set(w.id, w);
+    });
+    let mergedWorkspaces = Array.from(wsMap.values());
+    const genuineWs = mergedWorkspaces.filter((w) => {
+      if (w.name !== 'Meu Concurso') return true;
+      const wsData = localData.workspaceData?.[w.id] || cloudData.workspaceData?.[w.id];
+      return Boolean(wsData?.subjects && wsData.subjects.length > 0);
+    });
+    if (genuineWs.length > 0) {
+      mergedWorkspaces = genuineWs;
+    }
+
+    // 4. Workspace Data (Subjects, Subtopics OR logic, Flashcards SM-2)
+    const mergedWsData: Record<string, any> = {};
+    const allWsIds = new Set([
+      ...Object.keys(cloudData.workspaceData || {}),
+      ...Object.keys(localData.workspaceData || {}),
+    ]);
+
+    allWsIds.forEach((wsId) => {
+      const cloudWs = cloudData.workspaceData?.[wsId] || {};
+      const localWs = localData.workspaceData?.[wsId] || {};
+
+      // Subjects and Subtopics: Combine completion with logical OR (local.completed || remote.completed)
+      const localSubjects: Subject[] = localWs.subjects || [];
+      const cloudSubjects: Subject[] = cloudWs.subjects || [];
+      const subjectMap = new Map<string, Subject>();
+
+      cloudSubjects.forEach((sub) => {
+        if (sub?.id) subjectMap.set(sub.id, JSON.parse(JSON.stringify(sub)));
+      });
+
+      localSubjects.forEach((lSub) => {
+        if (!lSub?.id) return;
+        if (!subjectMap.has(lSub.id)) {
+          subjectMap.set(lSub.id, JSON.parse(JSON.stringify(lSub)));
+        } else {
+          const existing = subjectMap.get(lSub.id)!;
+          existing.name = lSub.name || existing.name;
+          existing.weight = lSub.weight || existing.weight;
+          existing.targetHours = lSub.targetHours || existing.targetHours;
+          existing.status = lSub.status || existing.status;
+          existing.granCourseUrl = lSub.granCourseUrl || existing.granCourseUrl;
+          existing.granQuery = lSub.granQuery || existing.granQuery;
+          existing.assuntoId = lSub.assuntoId || existing.assuntoId;
+          existing.disciplinaId = lSub.disciplinaId || existing.disciplinaId;
+          existing.notes = lSub.notes || existing.notes;
+
+          const localTopics = lSub.topics || [];
+          const existingTopics = existing.topics || [];
+          const topMap = new Map<string, any>();
+
+          existingTopics.forEach((t) => topMap.set(t.id, t));
+          localTopics.forEach((lt) => {
+            if (!topMap.has(lt.id)) {
+              existingTopics.push(lt);
+            } else {
+              const exTop = topMap.get(lt.id);
+              const exSubtopics: Subtopic[] = exTop.subtopics || [];
+              const lSubtopics: Subtopic[] = lt.subtopics || [];
+              const stMap = new Map<string, Subtopic>();
+
+              exSubtopics.forEach((st) => stMap.set(st.id, st));
+              lSubtopics.forEach((lst) => {
+                if (!stMap.has(lst.id)) {
+                  exSubtopics.push(lst);
+                } else {
+                  const exSt = stMap.get(lst.id)!;
+                  exSt.completed = Boolean(exSt.completed || lst.completed);
+                  if (lst.completedAt && (!exSt.completedAt || new Date(lst.completedAt) < new Date(exSt.completedAt))) {
+                    exSt.completedAt = lst.completedAt;
+                  }
+                  if ((lst as any).questionsAttempted) {
+                    (exSt as any).questionsAttempted = Math.max((exSt as any).questionsAttempted || 0, (lst as any).questionsAttempted);
+                  }
+                  if (lst.acertos !== undefined) {
+                    exSt.acertos = Math.max(exSt.acertos || 0, lst.acertos || 0);
+                  }
+                  if (lst.erros !== undefined) {
+                    exSt.erros = Math.max(exSt.erros || 0, lst.erros || 0);
+                  }
+                  if (lst.videoWatched) exSt.videoWatched = true;
+                  if (lst.pdfRead) exSt.pdfRead = true;
+                  if (lst.notes && !exSt.notes) exSt.notes = lst.notes;
+                  if (lst.videoLesson && !exSt.videoLesson) exSt.videoLesson = lst.videoLesson;
+                  if (lst.pdfLesson && !exSt.pdfLesson) exSt.pdfLesson = lst.pdfLesson;
+                }
+              });
+              exTop.subtopics = exSubtopics;
+            }
+          });
+          existing.topics = existingTopics;
+        }
+      });
+
+      // Flashcards: Union deduplicated by ID, prioritize highest SM-2 interval & repetition count
+      const cardMap = new Map<string, Flashcard>();
+      (cloudWs.flashcards || []).forEach((c: Flashcard) => {
+        if (c?.id) cardMap.set(c.id, c);
+      });
+      (localWs.flashcards || []).forEach((c: Flashcard) => {
+        if (!c?.id) return;
+        if (!cardMap.has(c.id)) {
+          cardMap.set(c.id, c);
+        } else {
+          const cloudCard = cardMap.get(c.id)!;
+          const bestCard = (c.interval || 0) > (cloudCard.interval || 0)
+            ? c
+            : (c.interval || 0) === (cloudCard.interval || 0) && (c.repetition || 0) >= (cloudCard.repetition || 0)
+            ? c
+            : cloudCard;
+          cardMap.set(c.id, bestCard);
+        }
+      });
+
+      // Spaced Reviews (Revisoes): Union deduplicated by ID, logical OR on done
+      const revMap = new Map<string, SpacedReview>();
+      (cloudWs.revisoes || []).forEach((r: SpacedReview) => {
+        if (r?.id) revMap.set(r.id, { ...r });
+      });
+      (localWs.revisoes || []).forEach((r: SpacedReview) => {
+        if (!r?.id) return;
+        if (!revMap.has(r.id)) {
+          revMap.set(r.id, { ...r });
+        } else {
+          const exRev = revMap.get(r.id)!;
+          exRev.done = Boolean(exRev.done || r.done);
+          if (r.completedAt && !exRev.completedAt) exRev.completedAt = r.completedAt;
+        }
+      });
+
+      mergedWsData[wsId] = {
+        ...cloudWs,
+        ...localWs,
+        subjects: Array.from(subjectMap.values()),
+        flashcards: Array.from(cardMap.values()),
+        revisoes: Array.from(revMap.values()),
+        cycleConfig: localWs.cycleConfig || cloudWs.cycleConfig || null,
+        cycleBlocks: (localWs.cycleBlocks && localWs.cycleBlocks.length > 0) ? localWs.cycleBlocks : (cloudWs.cycleBlocks || []),
+        cycleWeek: localWs.cycleWeek || cloudWs.cycleWeek || null,
+        concursoInfo: (localWs.concursoInfo?.concurso && localWs.concursoInfo?.dataProva)
+          ? localWs.concursoInfo
+          : (cloudWs.concursoInfo || localWs.concursoInfo || null),
+        autopilotSettings: localWs.autopilotSettings || cloudWs.autopilotSettings || null,
+      };
+    });
+
+    // 5. Gamification: Maximum streak, total XP, and all earned badges
+    let mergedGamification: GamificationProfile | null = null;
+    const localGam = localData.gamification;
+    const cloudGam = cloudData.gamification;
+    if (localGam || cloudGam) {
+      const dailyXp: Record<string, number> = { ...(cloudGam?.dailyXp || {}) };
+      if (localGam?.dailyXp) {
+        Object.entries(localGam.dailyXp).forEach(([date, xp]) => {
+          dailyXp[date] = Math.max(dailyXp[date] || 0, xp);
+        });
+      }
+
+      const historyIds = new Set<string>();
+      const combinedHistory = [
+        ...(cloudGam?.history || []),
+        ...(localGam?.history || []),
+      ].filter((item) => {
+        if (!item) return false;
+        const key = item.id || `${item.timestamp || (item as any).date}_${item.type}_${item.description}`;
+        if (historyIds.has(key)) return false;
+        historyIds.add(key);
+        return true;
+      });
+
+      mergedGamification = {
+        totalXp: Math.max(localGam?.totalXp || 0, cloudGam?.totalXp || 0),
+        dailyXp,
+        currentStreak: Math.max(localGam?.currentStreak || 0, cloudGam?.currentStreak || 0),
+        longestStreak: Math.max(localGam?.longestStreak || 0, cloudGam?.longestStreak || 0),
+        lastActiveDate: localGam?.lastActiveDate || cloudGam?.lastActiveDate,
+        history: combinedHistory,
+      };
+    }
+
+    return {
+      app: 'ixtude.ai',
+      version: 2,
+      exportedAt: new Date().toISOString(),
+      theme: localData.theme || cloudData.theme || 'dark',
+      workspaces: mergedWorkspaces,
+      activeWorkspaceId: localData.activeWorkspaceId || cloudData.activeWorkspaceId || (mergedWorkspaces[0]?.id ?? null),
+      sessions: mergedSessions,
+      questions: mergedQuestions,
+      workspaceData: mergedWsData,
+      gamification: mergedGamification,
+    };
+  },
+
+  // GUEST ACCOUNT MIGRATION ON LOGIN (Zero Data Loss)
+  migrateGuestData(_guestUserId: string | null = null, targetUserId: string): void {
+    if (!targetUserId || typeof localStorage === 'undefined') return;
+
+    try {
+      const prefix = 'concurso_estudos_';
+      const userPrefix = `concurso_estudos_${targetUserId}_`;
+      const guestKeys: string[] = [];
+
+      const guestKeyPatterns = [
+        'concurso_estudos_workspaces',
+        'concurso_estudos_active_workspace_id',
+        'concurso_estudos_sessions',
+        'concurso_estudos_questions',
+        'concurso_estudos_gamification_profile',
+        'concurso_estudos_active_timer',
+      ];
+
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!k || !k.startsWith(prefix) || k.includes(`_${targetUserId}_`)) continue;
+
+        const isExactGuestBase = guestKeyPatterns.includes(k);
+        const isGuestDynamic =
+          k.startsWith('concurso_estudos_subjects_') ||
+          k.startsWith('concurso_estudos_cycle_config_') ||
+          k.startsWith('concurso_estudos_cycle_blocks_') ||
+          k.startsWith('concurso_estudos_cycle_week_') ||
+          k.startsWith('concurso_estudos_concurso_info_') ||
+          k.startsWith('concurso_estudos_revisoes_') ||
+          k.startsWith('concurso_estudos_flashcards_') ||
+          k.startsWith('concurso_estudos_autopilot_settings_');
+
+        if (isExactGuestBase || isGuestDynamic) {
+          guestKeys.push(k);
+        }
+      }
+
+      guestKeys.forEach((guestKey) => {
+        const val = localStorage.getItem(guestKey);
+        if (val === null) return;
+
+        const suffix = guestKey.substring(prefix.length);
+        const userKey = `${userPrefix}${suffix}`;
+        const existingUserVal = localStorage.getItem(userKey);
+
+        if (!existingUserVal) {
+          localStorage.setItem(userKey, val);
+        } else {
+          try {
+            if (suffix === 'workspaces') {
+              const guestWs: CicloWorkspace[] = JSON.parse(val);
+              const userWs: CicloWorkspace[] = JSON.parse(existingUserVal);
+              const wsMap = new Map<string, CicloWorkspace>();
+              userWs.forEach((w) => wsMap.set(w.id, w));
+              guestWs.forEach((w) => {
+                if (!wsMap.has(w.id)) wsMap.set(w.id, w);
+              });
+              let merged = Array.from(wsMap.values());
+              const genuine = merged.filter((w) => w.name !== 'Meu Concurso');
+              if (genuine.length > 0) merged = genuine;
+              localStorage.setItem(userKey, JSON.stringify(merged));
+            } else if (suffix === 'sessions') {
+              const guestSess: StudySession[] = JSON.parse(val);
+              const userSess: StudySession[] = JSON.parse(existingUserVal);
+              const sessMap = new Map<string, StudySession>();
+              userSess.forEach((s) => sessMap.set(s.id, s));
+              guestSess.forEach((s) => sessMap.set(s.id, s));
+              const merged = Array.from(sessMap.values()).sort(
+                (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+              );
+              localStorage.setItem(userKey, JSON.stringify(merged));
+            } else if (suffix === 'questions') {
+              const guestQ: QuestionSession[] = JSON.parse(val);
+              const userQ: QuestionSession[] = JSON.parse(existingUserVal);
+              const qMap = new Map<string, QuestionSession>();
+              userQ.forEach((q) => qMap.set(q.id, q));
+              guestQ.forEach((q) => qMap.set(q.id, q));
+              const merged = Array.from(qMap.values()).sort(
+                (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+              );
+              localStorage.setItem(userKey, JSON.stringify(merged));
+            } else if (suffix === 'gamification_profile') {
+              const guestGam: GamificationProfile = JSON.parse(val);
+              const userGam: GamificationProfile = JSON.parse(existingUserVal);
+              const mergedGam: GamificationProfile = {
+                totalXp: Math.max(guestGam.totalXp || 0, userGam.totalXp || 0),
+                currentStreak: Math.max(guestGam.currentStreak || 0, userGam.currentStreak || 0),
+                longestStreak: Math.max(guestGam.longestStreak || 0, userGam.longestStreak || 0),
+                dailyXp: { ...(userGam.dailyXp || {}), ...(guestGam.dailyXp || {}) },
+                history: [...(userGam.history || []), ...(guestGam.history || [])],
+              };
+              localStorage.setItem(userKey, JSON.stringify(mergedGam));
+            }
+          } catch {
+            // Keep existing on parse failure
+          }
+        }
+      });
+    } catch {
+      // Non-fatal
+    }
+  },
+
+  importAllData(jsonStr: string, options: { merge?: boolean } = { merge: true }): { success: boolean; message: string } {
     try {
       if (!jsonStr || typeof jsonStr !== 'string') {
         return { success: false, message: 'Conteúdo do arquivo vazio ou inválido.' };
@@ -1055,19 +1445,16 @@ export const db = {
         return { success: false, message: 'Estrutura de backup incompatível ou vazia (nenhum ciclo ou dado reconhecido).' };
       }
 
-      // Clean up previous workspaces and active timer to prevent orphaned phantom keys
-      try {
-        const currentWs = this.getWorkspaces();
-        currentWs.forEach((ws) => this.deleteWorkspaceKeys(ws.id));
-        if (typeof localStorage !== 'undefined') {
-          localStorage.removeItem(KEYS.ACTIVE_TIMER);
-        }
-      } catch {
-        // Non-fatal if cleanup encounters environment restriction
+      // If merge mode is enabled (default), execute non-destructive merge with current state
+      if (options?.merge !== false) {
+        try {
+          const currentLocal = JSON.parse(this.exportAllData());
+          data = this.mergeData(currentLocal, data);
+        } catch {}
       }
 
-      // 1. If rawKeys exists, restore them directly to preserve full fidelity
-      if (hasRawKeys) {
+      // 1. If rawKeys exists and merge is disabled, restore them directly
+      if (hasRawKeys && options?.merge === false) {
         Object.entries(data.rawKeys).forEach(([k, v]) => {
           if (typeof v === 'string') {
             localStorage.setItem(k, v);
@@ -1135,9 +1522,15 @@ export const db = {
         });
       }
 
+      if (data.gamification) {
+        this.saveGamificationProfile(data.gamification);
+      }
+
+      this.notifyChange();
+
       return {
         success: true,
-        message: `Backup restaurado com sucesso! ${importedWsCount} ciclo(s), ${importedSessionsCount} sessões e ${importedQuestionsCount} questões recuperados.`,
+        message: `Backup restaurado com sucesso! ${importedWsCount} ciclo(s), ${importedSessionsCount} sessões e ${importedQuestionsCount} questões recuperados sem perda de dados.`,
       };
     } catch (err: any) {
       return {
@@ -1223,6 +1616,7 @@ export const db = {
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(key, JSON.stringify(profile));
     }
+    this.notifyChange();
   },
 
   awardXpAction(

@@ -36,6 +36,8 @@ export interface SystemMetrics {
   openFeedbacks: number;
 }
 
+export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'offline' | 'error';
+
 interface AuthContextType {
   user: AppUser | null;
   isLoading: boolean;
@@ -58,6 +60,7 @@ interface AuthContextType {
   allUsers: AppUser[];
   systemMetrics: SystemMetrics;
   syncWithCloud: () => Promise<{ success: boolean; message: string }>;
+  syncStatus: SyncStatus;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -151,25 +154,69 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [allUsers, setAllUsers] = useState<AppUser[]>([]);
   const [feedbacks, setFeedbacks] = useState<FeedbackItem[]>([]);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
 
   const isDemoMode = !isSupabaseConfigured();
 
-  // Helper to pull cloud sync data for authenticated user
+  // Helper to pull cloud sync data for authenticated user (non-destructive merge)
   const pullFromCloud = useCallback(async (userId: string) => {
-    if (!isSupabaseConfigured() || !supabase) return;
+    if (!isSupabaseConfigured() || !supabase) {
+      setSyncStatus('idle');
+      return;
+    }
     try {
+      setSyncStatus('syncing');
+      db.migrateGuestData(null, userId);
+      db.setCurrentUserId(userId);
+
       const { data, error } = await supabase
         .from('user_sync_data')
         .select('payload, updated_at')
         .eq('user_id', userId)
         .maybeSingle();
 
-      if (!error && data?.payload) {
-        db.setCurrentUserId(userId);
-        db.importAllData(JSON.stringify(data.payload));
+      if (error) {
+        setSyncStatus(navigator.onLine ? 'error' : 'offline');
+        return;
+      }
+
+      const localSnapshot = JSON.parse(db.exportAllData());
+
+      if (data?.payload) {
+        // Non-destructive merge of local cache and cloud snapshot
+        const merged = db.mergeData(localSnapshot, data.payload);
+        db.importAllData(JSON.stringify(merged));
+
+        // Push merged state back to cloud to guarantee convergence
+        const { error: pushError } = await supabase
+          .from('user_sync_data')
+          .upsert({
+            user_id: userId,
+            payload: merged,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'user_id' });
+
+        if (pushError) {
+          setSyncStatus('error');
+        } else {
+          setSyncStatus('synced');
+        }
+      } else {
+        // Brand new user or no cloud row yet: push existing local state
+        if (localSnapshot.workspaces && localSnapshot.workspaces.length > 0) {
+          await supabase
+            .from('user_sync_data')
+            .upsert({
+              user_id: userId,
+              payload: localSnapshot,
+              updated_at: new Date().toISOString(),
+            }, { onConflict: 'user_id' });
+        }
+        setSyncStatus('synced');
       }
     } catch {
       // Fallback silently to local cache if network is unavailable
+      setSyncStatus(navigator.onLine ? 'error' : 'offline');
     }
   }, []);
 
@@ -250,6 +297,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             createdAt: session.user.created_at || new Date().toISOString(),
             provider: 'supabase',
           };
+          db.migrateGuestData(null, appUser.id);
           db.setCurrentUserId(appUser.id);
           setUser(appUser);
           localStorage.setItem(KEYS.CURRENT_USER, JSON.stringify(appUser));
@@ -260,6 +308,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Restore local saved session if any
           const savedUser = safeJsonParse<AppUser | null>(localStorage.getItem(KEYS.CURRENT_USER), null);
           if (savedUser) {
+            db.migrateGuestData(null, savedUser.id);
             db.setCurrentUserId(savedUser.id);
             setUser(savedUser);
           }
@@ -284,6 +333,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             createdAt: session.user.created_at || new Date().toISOString(),
             provider: 'supabase',
           };
+          db.migrateGuestData(null, appUser.id);
           db.setCurrentUserId(appUser.id);
           setUser(appUser);
           localStorage.setItem(KEYS.CURRENT_USER, JSON.stringify(appUser));
@@ -293,6 +343,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else {
           db.setCurrentUserId(null);
           setUser(null);
+          setSyncStatus('idle');
           localStorage.removeItem(KEYS.CURRENT_USER);
         }
       });
@@ -304,12 +355,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Local demo mode
       const savedUser = safeJsonParse<AppUser | null>(localStorage.getItem(KEYS.CURRENT_USER), null);
       if (savedUser) {
+        db.migrateGuestData(null, savedUser.id);
         db.setCurrentUserId(savedUser.id);
         setUser(savedUser);
       } else {
         // Auto-login as demo user by default for instant zero-barrier experience
         const defaultStudent = loadedUsers.find((u) => u.role === 'user') || loadedUsers[0];
         if (defaultStudent) {
+          db.migrateGuestData(null, defaultStudent.id);
           db.setCurrentUserId(defaultStudent.id);
           setUser(defaultStudent);
           localStorage.setItem(KEYS.CURRENT_USER, JSON.stringify(defaultStudent));
@@ -318,6 +371,73 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsLoading(false);
     }
   }, [pullFromCloud, fetchCloudFeedbacks, fetchCloudProfiles]);
+
+  // Debounced continuous cloud auto-sync (1500ms) on local mutations
+  useEffect(() => {
+    if (!user || user.provider === 'local' || !isSupabaseConfigured() || !supabase) {
+      return;
+    }
+
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const handleMutation = () => {
+      setSyncStatus('syncing');
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(async () => {
+        try {
+          if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            setSyncStatus('offline');
+            return;
+          }
+
+          const client = supabase;
+          if (!client) return;
+
+          const backupJson = db.exportAllData();
+          const payload = JSON.parse(backupJson);
+
+          const { error } = await client
+            .from('user_sync_data')
+            .upsert({
+              user_id: user.id,
+              payload,
+              updated_at: new Date().toISOString(),
+            }, { onConflict: 'user_id' });
+
+          if (error) {
+            setSyncStatus('error');
+          } else {
+            setSyncStatus('synced');
+          }
+        } catch {
+          setSyncStatus(typeof navigator !== 'undefined' && navigator.onLine ? 'error' : 'offline');
+        }
+      }, 1500);
+    };
+
+    const unsubscribe = db.subscribe(handleMutation);
+
+    const onOnline = () => {
+      handleMutation();
+    };
+    const onOffline = () => {
+      setSyncStatus('offline');
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('online', onOnline);
+      window.addEventListener('offline', onOffline);
+    }
+
+    return () => {
+      if (timer) clearTimeout(timer);
+      unsubscribe();
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('online', onOnline);
+        window.removeEventListener('offline', onOffline);
+      }
+    };
+  }, [user]);
 
   const isAdmin = useMemo(() => {
     if (!user) return false;
@@ -359,6 +479,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             createdAt: data.user.created_at || new Date().toISOString(),
             provider: 'supabase',
           };
+          db.migrateGuestData(null, appUser.id);
           db.setCurrentUserId(appUser.id);
           setUser(appUser);
           localStorage.setItem(KEYS.CURRENT_USER, JSON.stringify(appUser));
@@ -389,6 +510,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setAllUsers(updated);
       }
 
+      db.migrateGuestData(null, matched.id);
       db.setCurrentUserId(matched.id);
       setUser(matched);
       localStorage.setItem(KEYS.CURRENT_USER, JSON.stringify(matched));
@@ -438,6 +560,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             createdAt: data.user.created_at || new Date().toISOString(),
             provider: 'supabase',
           };
+          db.migrateGuestData(null, appUser.id);
           db.setCurrentUserId(appUser.id);
           setUser(appUser);
           localStorage.setItem(KEYS.CURRENT_USER, JSON.stringify(appUser));
@@ -465,6 +588,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const updated = [...mockList, newUser];
       localStorage.setItem(KEYS.MOCK_USERS, JSON.stringify(updated));
       setAllUsers(updated);
+      db.migrateGuestData(null, newUser.id);
       db.setCurrentUserId(newUser.id);
       setUser(newUser);
       localStorage.setItem(KEYS.CURRENT_USER, JSON.stringify(newUser));
@@ -481,6 +605,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     db.setCurrentUserId(null);
     setUser(null);
+    setSyncStatus('idle');
     localStorage.removeItem(KEYS.CURRENT_USER);
   }, []);
 
@@ -494,6 +619,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       createdAt: new Date().toISOString(),
       provider: 'local',
     };
+    db.migrateGuestData(null, demoUser.id);
     db.setCurrentUserId(demoUser.id);
     setUser(demoUser);
     localStorage.setItem(KEYS.CURRENT_USER, JSON.stringify(demoUser));
@@ -509,6 +635,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       createdAt: new Date().toISOString(),
       provider: 'local',
     };
+    db.migrateGuestData(null, adminUser.id);
     db.setCurrentUserId(adminUser.id);
     setUser(adminUser);
     localStorage.setItem(KEYS.CURRENT_USER, JSON.stringify(adminUser));
@@ -632,6 +759,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
+      setSyncStatus('syncing');
       const backupJson = db.exportAllData();
       const payload = JSON.parse(backupJson);
 
@@ -644,11 +772,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }, { onConflict: 'user_id' });
 
       if (error) {
+        setSyncStatus('error');
         return { success: false, message: `Erro na sincronização: ${error.message}` };
       }
 
+      setSyncStatus('synced');
       return { success: true, message: 'Dados sincronizados com a nuvem com sucesso!' };
     } catch (err: unknown) {
+      setSyncStatus('error');
       return { success: false, message: formatSafeError(err) };
     }
   }, [user]);
@@ -671,6 +802,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       allUsers,
       systemMetrics,
       syncWithCloud,
+      syncStatus,
     }),
     [
       user,
@@ -689,6 +821,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       allUsers,
       systemMetrics,
       syncWithCloud,
+      syncStatus,
     ]
   );
 

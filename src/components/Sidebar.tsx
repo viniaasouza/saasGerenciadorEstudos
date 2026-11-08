@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Sparkles, Calendar, Timer, Award, BarChart3, BookOpen, 
+  Sparkles, Calendar, Timer, Award, BarChart3,
   FileText, RotateCcw, Layers, ChevronLeft, ChevronRight,
-  Shield, Globe, MessageSquare, User, LogIn, LogOut
+  Shield, Globe, MessageSquare, User, LogIn, LogOut, X
 } from 'lucide-react';
 import type { ConcursoInfo } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { InfiniteBookLogo } from './InfiniteBookLogo';
 
 interface SidebarProps {
   activeTab: string;
@@ -15,6 +16,8 @@ interface SidebarProps {
   onToggleLandingPage?: () => void;
   onOpenAuth?: () => void;
   onOpenTerms?: () => void;
+  isMobileOpen?: boolean;
+  onCloseMobile?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ 
@@ -25,6 +28,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onToggleLandingPage,
   onOpenAuth,
   onOpenTerms,
+  isMobileOpen = false,
+  onCloseMobile,
 }) => {
   const { user, signOut, isAdmin } = useAuth();
 
@@ -56,6 +61,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isMobileOpen && onCloseMobile) {
+        onCloseMobile();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isMobileOpen, onCloseMobile]);
+
   const baseMenuItems = [
     { id: 'autopilot', label: 'Piloto Automático', icon: Sparkles, description: 'Missão de Hoje' },
     { id: 'planning', label: 'Planejamento', icon: Calendar, description: 'Ciclo & Pesos' },
@@ -81,48 +96,69 @@ export const Sidebar: React.FC<SidebarProps> = ({
   }
 
   return (
-    <aside className={`sidebar ${isCollapsed ? 'collapsed' : ''}`}>
-      <div className="logo-area" style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: isCollapsed ? 'center' : 'space-between',
-        padding: isCollapsed ? '1.25rem 0.5rem' : '1.5rem 1.25rem',
-        gap: '0.5rem'
-      }}>
-        {!isCollapsed ? (
-          <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', overflow: 'hidden' }}>
-              <BookOpen className="logo-icon" />
-              <div className="logo-text">
-                <h1>ixtude.ai</h1>
-                <span>Ciclo Inteligente & Edital</span>
+    <>
+      {isMobileOpen && (
+        <div
+          className="mobile-drawer-backdrop"
+          onClick={onCloseMobile}
+          aria-hidden="true"
+        />
+      )}
+      <aside className={`sidebar ${isCollapsed ? 'collapsed' : ''} ${isMobileOpen ? 'mobile-open' : ''}`}>
+        <div className="logo-area" style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: isCollapsed ? 'center' : 'space-between',
+          padding: isCollapsed ? '1.25rem 0.5rem' : '1.5rem 1.25rem',
+          gap: '0.5rem'
+        }}>
+          {!isCollapsed ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', overflow: 'hidden' }}>
+                <InfiniteBookLogo size={32} className="logo-icon" />
+                <div className="logo-text">
+                  <h1>ixtude.ai</h1>
+                  <span>Ciclo Inteligente & Edital</span>
+                </div>
               </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                {onCloseMobile && (
+                  <button
+                    type="button"
+                    onClick={onCloseMobile}
+                    className="mobile-drawer-close-btn mobile-only"
+                    title="Fechar menu"
+                    aria-label="Fechar menu"
+                  >
+                    <X size={20} />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={toggleCollapse}
+                  className="sidebar-toggle-btn"
+                  title="Recolher menu lateral"
+                  aria-label="Recolher menu lateral"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+              </div>
+            </>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
+              <InfiniteBookLogo size={32} className="logo-icon" />
+              <button
+                type="button"
+                onClick={toggleCollapse}
+                className="sidebar-toggle-btn"
+                title="Expandir menu lateral"
+                aria-label="Expandir menu lateral"
+              >
+                <ChevronRight size={18} />
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={toggleCollapse}
-              className="sidebar-toggle-btn"
-              title="Recolher menu lateral"
-              aria-label="Recolher menu lateral"
-            >
-              <ChevronLeft size={18} />
-            </button>
-          </>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
-            <BookOpen className="logo-icon" />
-            <button
-              type="button"
-              onClick={toggleCollapse}
-              className="sidebar-toggle-btn"
-              title="Expandir menu lateral"
-              aria-label="Expandir menu lateral"
-            >
-              <ChevronRight size={18} />
-            </button>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
 
       {/* EXAM COUNTDOWN CARD */}
       {hasExamDate && concursoInfo?.dataProva && (!isCollapsed ? (
@@ -193,6 +229,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 setActiveTab(item.id);
                 if (typeof window !== 'undefined' && window.innerWidth < 960) {
                   setIsCollapsed(true);
+                }
+                if (onCloseMobile) {
+                  onCloseMobile();
                 }
               }}
               className={`nav-item ${isActive ? 'active' : ''}`}
@@ -378,6 +417,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           }}
         />
       )}
-    </aside>
+      </aside>
+    </>
   );
 };

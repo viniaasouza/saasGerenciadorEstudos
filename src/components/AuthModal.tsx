@@ -92,12 +92,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       onClick={onClose}
     >
       <div
-        className="card-primary"
+        className="card-primary app-modal-card"
         style={{
           width: '100%',
           maxWidth: '460px',
           borderRadius: '16px',
-          padding: '2rem',
           position: 'relative',
           boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.4)',
           border: '1px solid var(--border-color)',
@@ -106,21 +105,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       >
         <button
           onClick={onClose}
+          className="modal-close-btn"
           style={{
             position: 'absolute',
-            top: '1.25rem',
-            right: '1.25rem',
+            top: '0.75rem',
+            right: '0.75rem',
+            width: '44px',
+            height: '44px',
+            minWidth: '44px',
+            minHeight: '44px',
             background: 'none',
             border: 'none',
             color: 'var(--text-muted)',
             cursor: 'pointer',
-            padding: '4px',
-            borderRadius: '6px',
+            borderRadius: '8px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
           }}
           title="Fechar"
+          aria-label="Fechar"
         >
           <X size={20} />
         </button>

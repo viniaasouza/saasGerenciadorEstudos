@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Sun, Moon, Clock, Calendar, Play, Download, Upload, 
-  Sparkles, MessageSquare, LogIn, LogOut, User, Globe
+  Sparkles, MessageSquare, LogIn, LogOut, User, Globe,
+  Cloud, CloudOff, RefreshCw, AlertCircle, Menu
 } from 'lucide-react';
 import type { ConcursoInfo, RunningTimerState } from '../types';
 import { db } from '../db/database';
 import { useAuth } from '../context/AuthContext';
+import { InfiniteBookLogo } from './InfiniteBookLogo';
 
 interface HeaderProps {
   theme: 'dark' | 'light';
@@ -19,6 +21,7 @@ interface HeaderProps {
   onOpenFeedback?: () => void;
   onOpenAiImport?: () => void;
   onToggleLandingPage?: () => void;
+  onToggleMobileMenu?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -33,8 +36,9 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenFeedback,
   onOpenAiImport,
   onToggleLandingPage,
+  onToggleMobileMenu,
 }) => {
-  const { user, signOut } = useAuth();
+  const { user, signOut, syncStatus, syncWithCloud } = useAuth();
   const [runningTimer, setRunningTimer] = useState<RunningTimerState | null>(null);
   const [liveElapsed, setLiveElapsed] = useState(0);
 
@@ -127,13 +131,30 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <header className="app-header">
-      <div className="header-greeting">
-        <h2>{displayName ? `Bons estudos, ${displayName}!` : 'Bons estudos!'}</h2>
-        {hasConfiguredExam && concursoInfo && (
-          <p className="header-subtitle">
-            Foco e persistência rumo à aprovação no {concursoInfo.concurso} {concursoInfo.banca ? `• ${concursoInfo.banca}` : ''}.
-          </p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        {onToggleMobileMenu && (
+          <button
+            type="button"
+            onClick={onToggleMobileMenu}
+            className="mobile-menu-btn"
+            title="Abrir menu de navegação"
+            aria-label="Abrir menu de navegação"
+          >
+            <Menu size={20} />
+          </button>
         )}
+        <div className="mobile-header-brand mobile-only" style={{ alignItems: 'center', gap: '0.5rem' }}>
+          <InfiniteBookLogo size={26} />
+          <span style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--text-title)' }}>ixtude.ai</span>
+        </div>
+        <div className="header-greeting hide-mobile-brand">
+          <h2>{displayName ? `Bons estudos, ${displayName}!` : 'Bons estudos!'}</h2>
+          {hasConfiguredExam && concursoInfo && (
+            <p className="header-subtitle">
+              Foco e persistência rumo à aprovação no {concursoInfo.concurso} {concursoInfo.banca ? `• ${concursoInfo.banca}` : ''}.
+            </p>
+          )}
+        </div>
       </div>
 
       <div className="header-actions">
@@ -236,6 +257,76 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="badge-value">{weeklyHoursCompleted}h / {weeklyHoursTarget}h</span>
           </div>
         </div>
+
+        {/* Supabase Cloud Auto-Sync Status Badge */}
+        {user && (
+          <button
+            onClick={() => syncWithCloud()}
+            className="cycle-badge header-sync-badge"
+            style={{
+              cursor: 'pointer',
+              border: syncStatus === 'error' ? '1px solid #ef4444' : undefined,
+              transition: 'all 0.2s ease',
+            }}
+            title={
+              syncStatus === 'syncing'
+                ? 'Sincronizando com a nuvem...'
+                : syncStatus === 'synced'
+                ? 'Nuvem sincronizada (Zero Data Loss). Clique para sincronizar agora.'
+                : syncStatus === 'offline'
+                ? 'Modo Offline: alterações salvas localmente no dispositivo. Serão enviadas ao reconectar.'
+                : syncStatus === 'error'
+                ? 'Erro ao sincronizar com a nuvem. Seus dados estão seguros localmente. Clique para tentar novamente.'
+                : 'Clique para sincronizar com a nuvem'
+            }
+          >
+            {syncStatus === 'syncing' && (
+              <>
+                <RefreshCw size={13} className="badge-icon animate-spin text-blue-500" style={{ animation: 'spin 1s linear infinite' }} />
+                <div className="badge-content hide-mobile">
+                  <span className="badge-title">Nuvem</span>
+                  <span className="badge-value text-blue-500">Salvando...</span>
+                </div>
+              </>
+            )}
+            {syncStatus === 'synced' && (
+              <>
+                <Cloud size={13} className="badge-icon text-emerald-500" />
+                <div className="badge-content hide-mobile">
+                  <span className="badge-title">Nuvem</span>
+                  <span className="badge-value text-emerald-500">Sincronizado</span>
+                </div>
+              </>
+            )}
+            {syncStatus === 'offline' && (
+              <>
+                <CloudOff size={13} className="badge-icon text-amber-500" />
+                <div className="badge-content hide-mobile">
+                  <span className="badge-title">Nuvem</span>
+                  <span className="badge-value text-amber-500">Offline</span>
+                </div>
+              </>
+            )}
+            {syncStatus === 'error' && (
+              <>
+                <AlertCircle size={13} className="badge-icon text-rose-500" />
+                <div className="badge-content hide-mobile">
+                  <span className="badge-title">Nuvem</span>
+                  <span className="badge-value text-rose-500">Reconectar</span>
+                </div>
+              </>
+            )}
+            {syncStatus === 'idle' && (
+              <>
+                <Cloud size={13} className="badge-icon text-emerald-500" />
+                <div className="badge-content hide-mobile">
+                  <span className="badge-title">Nuvem</span>
+                  <span className="badge-value text-emerald-500">Ativa</span>
+                </div>
+              </>
+            )}
+          </button>
+        )}
 
         {/* Universal JSON Backup & Restore System */}
         <button

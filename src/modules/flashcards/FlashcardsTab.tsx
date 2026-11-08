@@ -1079,7 +1079,7 @@ export const FlashcardsTab: React.FC<FlashcardsTabProps> = ({ activeWorkspaceId 
                     style={{
                       padding: '1.25rem',
                       display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fill, minmax(310px, 1fr))',
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 280px), 1fr))',
                       gap: '1rem',
                       backgroundColor: 'var(--bg-card)',
                     }}
@@ -1096,7 +1096,7 @@ export const FlashcardsTab: React.FC<FlashcardsTabProps> = ({ activeWorkspaceId 
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 280px), 1fr))',
             gap: '1rem',
           }}
         >
@@ -1124,7 +1124,7 @@ export const FlashcardsTab: React.FC<FlashcardsTabProps> = ({ activeWorkspaceId 
           cards={reviewQueue}
           onSaveCard={(card) => {
             handleSaveCard(card);
-            db.recordFlashcardStudySession(activeWorkspaceId, card, 75);
+            db.recordFlashcardStudySession(activeWorkspaceId, card, 30);
           }}
           onClose={() => {
             setIsReviewModalOpen(false);

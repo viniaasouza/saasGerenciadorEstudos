@@ -415,9 +415,10 @@ export const SyllabusTab: React.FC<SyllabusTabProps> = ({ activeWorkspaceId, onS
               alignItems: 'center',
               gap: '6px',
             }}
+            title="Importar Edital Verticalizado com IA"
           >
             <Sparkles size={16} />
-            <span>Importar com IA</span>
+            <span>⚡ Importar Edital com IA</span>
           </button>
 
           {/* GRAN QUESTÕES BANCA QUICK FILTER */}
@@ -1014,7 +1015,7 @@ export const SyllabusTab: React.FC<SyllabusTabProps> = ({ activeWorkspaceId, onS
                             </div>
                           </div>
 
-                          <div style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+                          <div className="table-responsive-wrapper" style={{ width: '100%', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
                             <table style={{ width: '100%', minWidth: '680px', borderCollapse: 'collapse', marginTop: '6px', fontSize: '0.88rem' }}>
                             <thead>
                               <tr style={{ textAlign: 'left', fontSize: '0.73rem', textTransform: 'uppercase', color: 'var(--text-muted, #94a3b8)', borderBottom: '1px solid var(--border-color, #e2e8f0)' }}>
@@ -1774,6 +1775,7 @@ export const SyllabusTab: React.FC<SyllabusTabProps> = ({ activeWorkspaceId, onS
       <AiSyllabusImportModal
         isOpen={isAiImportOpen}
         onClose={() => setIsAiImportOpen(false)}
+        activeWorkspaceId={activeWorkspaceId}
         onWorkspaceCreated={(wsId) => {
           setSubjects(db.getSubjects(wsId));
         }}

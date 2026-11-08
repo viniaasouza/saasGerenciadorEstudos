@@ -134,18 +134,20 @@ export const WorkspaceTabBar: React.FC<WorkspaceTabBarProps> = ({
               }}
               style={{
                 color: isActive ? 'var(--text-title)' : 'var(--text-muted)',
-                opacity: isActive ? 0.9 : 0.5,
+                opacity: isActive ? 0.9 : 0.7,
                 padding: '4px',
                 borderRadius: '6px',
-                display: 'flex',
+                display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 cursor: 'pointer',
-                background: 'transparent',
-                border: 'none',
+                width: '28px',
+                height: '28px',
+                minWidth: '28px',
+                minHeight: '28px',
                 transition: 'all 0.15s ease',
               }}
-              className="theme-toggle"
+              className="icon-btn-secondary"
               title={`Configurações do ciclo "${ws.name}"`}
             >
               <Settings size={14} />
@@ -178,7 +180,7 @@ export const WorkspaceTabBar: React.FC<WorkspaceTabBarProps> = ({
           flexShrink: 0,
           transition: 'all 0.15s ease',
         }}
-        className="theme-toggle"
+        title="Criar novo ciclo de estudos"
       >
         <Plus size={14} /> Novo Ciclo
       </button>

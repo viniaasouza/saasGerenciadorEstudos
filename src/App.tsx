@@ -56,6 +56,7 @@ function App() {
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [isAiImportOpen, setIsAiImportOpen] = useState(false);
   const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   // Multi-Workspace States
   const [workspaces, setWorkspaces] = useState<CicloWorkspace[]>([]);
@@ -95,6 +96,9 @@ function App() {
   // Clean Workspace Initialization effect — reacts to logged-in user changes for multi-user isolation
   const userId = user?.id;
   useEffect(() => {
+    if (userId) {
+      db.migrateGuestData(null, userId);
+    }
     db.setCurrentUserId(userId || null);
     let wsList = db.getWorkspaces();
     let activeId = db.getActiveWorkspaceId();
@@ -133,6 +137,22 @@ function App() {
     setPromotionCandidate(null);
     setRefreshStatsTrigger((p) => p + 1);
   }, [userId]);
+
+  // Reactively sync workspace list when background cloud synchronization converges
+  useEffect(() => {
+    const unsubscribe = db.subscribe(() => {
+      const updatedWs = db.getWorkspaces();
+      if (updatedWs.length > 0) {
+        setWorkspaces(updatedWs);
+        const currentActive = db.getActiveWorkspaceId();
+        if (currentActive && updatedWs.some((w) => w.id === currentActive)) {
+          setActiveWorkspaceId(currentActive);
+        }
+      }
+      setRefreshStatsTrigger((p) => p + 1);
+    });
+    return () => unsubscribe();
+  }, []);
 
   // Recalculate study stats for the active workspace in the header badge
   useEffect(() => {
@@ -422,6 +442,8 @@ function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         concursoInfo={concursoInfo}
+        isMobileOpen={mobileNavOpen}
+        onCloseMobile={() => setMobileNavOpen(false)}
         onOpenFeedback={() => setIsFeedbackModalOpen(true)}
         onToggleLandingPage={() => setShowLandingPage(true)}
         onOpenAuth={() => {
@@ -456,6 +478,7 @@ function App() {
           onOpenFeedback={() => setIsFeedbackModalOpen(true)}
           onOpenAiImport={() => setIsAiImportOpen(true)}
           onToggleLandingPage={() => setShowLandingPage(true)}
+          onToggleMobileMenu={() => setMobileNavOpen((prev) => !prev)}
         />
         <main className="content-area">
           <div className="fade-in-tab">{renderActiveTab()}</div>
@@ -532,6 +555,7 @@ function App() {
       <AiSyllabusImportModal
         isOpen={isAiImportOpen}
         onClose={() => setIsAiImportOpen(false)}
+        activeWorkspaceId={activeWorkspaceId}
         onWorkspaceCreated={(wsId) => {
           const updated = db.getWorkspaces();
           setWorkspaces(updated);

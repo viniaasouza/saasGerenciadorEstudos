@@ -675,7 +675,7 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
                     {dueFlashcards.length} flashcard{dueFlashcards.length > 1 ? 's' : ''} para revisar no SM-2
                   </div>
                   <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                    Repetição espaçada algorítmica (+1m 15s por card adicionados ao tempo de estudo).
+                    Repetição espaçada algorítmica (+30s por card adicionados ao tempo de estudo).
                   </div>
                 </div>
               </div>
@@ -696,7 +696,7 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
                 }}
               >
                 <Brain size={16} />
-                Revisar {dueFlashcards.length} Flashcard{dueFlashcards.length > 1 ? 's' : ''} (+1m 15s/card • +10 XP)
+                Revisar {dueFlashcards.length} Flashcard{dueFlashcards.length > 1 ? 's' : ''} (+30s/card • +10 XP)
               </button>
             </div>
           )}
@@ -1195,7 +1195,7 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
                         <label
                           style={{
                             display: 'inline-flex',
-                            alignItems: 'center',
+                            alignItems: 'flex-start',
                             gap: '6px',
                             fontSize: '0.78rem',
                             color: 'var(--text-muted)',
@@ -1222,6 +1222,8 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
                               height: '15px',
                               cursor: 'pointer',
                               accentColor: 'var(--color-primary)',
+                              marginTop: '2px',
+                              flexShrink: 0,
                             }}
                           />
                           <span>Agendar revisão 24h (D+1)</span>
@@ -1599,8 +1601,8 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
               localStorage.setItem(key, String(nextCount));
             }
 
-            // Registra 1m 15s (75s) de tempo de estudo por flashcard revisado
-            db.recordFlashcardStudySession(activeWorkspaceId, card, 75);
+            // Registra 30s (0,5 min) de tempo de estudo por flashcard revisado
+            db.recordFlashcardStudySession(activeWorkspaceId, card, 30);
 
             triggerXpAward('flashcard_reviewed', XP_CONFIG.FLASHCARD_REVIEWED, 'Flashcard revisado (SM-2)');
           }}
@@ -1736,7 +1738,7 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
                 </select>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
                 <input
                   type="checkbox"
                   id="autoD1"
@@ -1744,9 +1746,9 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
                   onChange={(e) =>
                     setTempSettings((prev) => ({ ...prev, autoScheduleD1Review: e.target.checked }))
                   }
-                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                  style={{ width: '18px', height: '18px', cursor: 'pointer', marginTop: '2px', flexShrink: 0 }}
                 />
-                <label htmlFor="autoD1" style={{ fontSize: '0.85rem', color: 'var(--text-main)', cursor: 'pointer' }}>
+                <label htmlFor="autoD1" style={{ fontSize: '0.85rem', color: 'var(--text-main)', cursor: 'pointer', lineHeight: 1.4 }}>
                   Agendar revisão D+1 (24 horas) automaticamente ao concluir teoria
                 </label>
               </div>
@@ -1789,6 +1791,7 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
       <AiSyllabusImportModal
         isOpen={isAiImportOpen}
         onClose={() => setIsAiImportOpen(false)}
+        activeWorkspaceId={activeWorkspaceId}
         onWorkspaceCreated={() => {
           loadWorkspaceData();
           if (onRefreshStats) onRefreshStats();

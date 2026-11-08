@@ -247,7 +247,7 @@ export const AdminTab: React.FC<AdminTabProps> = ({ onOpenAuthModal }) => {
           </div>
 
           {/* Quick Status and Recent Activity */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '1.5rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: '1.5rem' }}>
             <div className="card-primary" style={{ padding: '1.5rem', borderRadius: '16px', border: '1px solid var(--border-color)' }}>
               <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '1rem', color: 'var(--text-main)' }}>
                 Conexão da Plataforma

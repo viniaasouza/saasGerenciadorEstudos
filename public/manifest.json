@@ -1,0 +1,17 @@
+{
+  "name": "ixtude.ai • Ciclo Inteligente & Edital Verticalizado",
+  "short_name": "ixtude.ai",
+  "description": "Plataforma moderna de estudos com ciclo dinâmico, edital verticalizado, flashcards SM-2 e tracking de questões.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "128x128 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

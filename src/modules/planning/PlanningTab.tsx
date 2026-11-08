@@ -363,9 +363,10 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({ onStartStudy, activeBl
             onClick={() => setIsAiImportOpen(true)} 
             className="mock-btn" 
             style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', width: '100%', justifyContent: 'center', fontWeight: 'bold' }}
+            title="Importar Edital Verticalizado com IA"
           >
             <Sparkles size={18} />
-            Importar com IA (1 Clique)
+            ⚡ Importar Edital com IA
           </button>
           <p className="card-notes" style={{ marginTop: '0.5rem', textAlign: 'center' }}>
             Transforme qualquer edital em PDF com IA gratuita.
@@ -762,7 +763,12 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({ onStartStudy, activeBl
                           </span>
                         )}
 
-                        <button onClick={() => handleDeleteSubject(sub.id)} style={{ color: 'var(--color-danger)', padding: '0.4rem', borderRadius: '6px' }} className="theme-toggle">
+                        <button
+                          onClick={() => handleDeleteSubject(sub.id)}
+                          style={{ color: 'var(--color-danger)', padding: '0.4rem', borderRadius: '6px' }}
+                          className="icon-btn-secondary"
+                          title="Excluir disciplina"
+                        >
                           <Trash2 size={16} />
                         </button>
                       </div>
@@ -914,6 +920,7 @@ export const PlanningTab: React.FC<PlanningTabProps> = ({ onStartStudy, activeBl
       <AiSyllabusImportModal
         isOpen={isAiImportOpen}
         onClose={() => setIsAiImportOpen(false)}
+        activeWorkspaceId={activeWorkspaceId}
         onWorkspaceCreated={(wsId) => {
           setSubjects(db.getSubjects(wsId));
           const syncRes = db.syncCycleSchedule(wsId);

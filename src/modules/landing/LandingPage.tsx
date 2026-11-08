@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { FooterAdBanner } from '../../components/FooterAdBanner';
+import { InfiniteBookLogo } from '../../components/InfiniteBookLogo';
 
 interface LandingPageProps {
   onEnterApp: () => void;
@@ -85,20 +86,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <div
-            style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '10px',
-              backgroundColor: 'var(--color-accent)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#ffffff',
-            }}
-          >
-            <BookOpen size={20} />
-          </div>
+          <InfiniteBookLogo size={36} />
           <div>
             <div style={{ fontSize: '1.25rem', fontWeight: 900, letterSpacing: '-0.5px' }}>ixtude.ai</div>
             <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>Ciclo & Edital Inteligente</div>
@@ -291,7 +279,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </p>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.5rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: '1.5rem' }}>
           {/* Card 1 */}
           <div className="card-primary" style={{ padding: '2rem', borderRadius: '16px', border: '1px solid var(--border-color)' }}>
             <div

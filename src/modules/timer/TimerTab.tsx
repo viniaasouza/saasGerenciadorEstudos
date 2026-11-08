@@ -58,7 +58,7 @@ export const TimerTab: React.FC<TimerTabProps> = ({
   const [displaySeconds, setDisplaySeconds] = useState(0);
   const [timeRemaining, setTimeRemaining] = useState(90 * 60);
   const [showSaveModal, setShowSaveModal] = useState(false);
-  const [modalDurationMinutes, setModalDurationMinutes] = useState<number>(45);
+  const [modalDurationMinutes, setModalDurationMinutes] = useState<number>(durationMinutes || 30);
   const [liveSuccessMsg, setLiveSuccessMsg] = useState<string | null>(null);
   const [todaySessions, setTodaySessions] = useState<StudySession[]>([]);
 
@@ -322,8 +322,16 @@ export const TimerTab: React.FC<TimerTabProps> = ({
 
           if (remaining <= 0) {
             clearInterval(timerRef.current!);
+            const finalElapsed = accumulatedSeconds + (startTime ? Math.floor((now - startTime) / 1000) : 0);
+            const actualSeconds = Math.max(finalElapsed, totalTarget);
+            const liquidMinutes = Math.max(1, Math.round(actualSeconds / 60));
+
             setIsActive(false);
+            setIsPaused(false);
             setStartTime(null);
+            setAccumulatedSeconds(actualSeconds);
+            setDisplaySeconds(actualSeconds);
+            setModalDurationMinutes(liquidMinutes);
             playAlarmSound();
             setShowSaveModal(true);
             db.saveActiveTimer(null);
@@ -414,7 +422,7 @@ export const TimerTab: React.FC<TimerTabProps> = ({
     const wsList = db.getWorkspaces();
     const activeWs = wsList.find(w => w.id === activeWorkspaceId);
 
-    const isVideoStudy = studyType === 'videoaula' || studyType === 'teoria';
+    const isVideoStudy = studyType === 'videoaula';
     const isPdfStudy = studyType === 'pdf';
     const effectiveSeconds = modalDurationMinutes > 0 ? modalDurationMinutes * 60 : displaySeconds;
     const grossSeconds = isVideoStudy ? Math.round(effectiveSeconds * playbackSpeed) : effectiveSeconds;
@@ -599,7 +607,7 @@ export const TimerTab: React.FC<TimerTabProps> = ({
     const ac = typeof manualAcertos === 'number' ? manualAcertos : 0;
     const er = typeof manualErros === 'number' ? manualErros : 0;
 
-    const isVideoStudy = manualStudyType === 'videoaula' || manualStudyType === 'teoria';
+    const isVideoStudy = manualStudyType === 'videoaula';
     const isPdfStudy = manualStudyType === 'pdf';
     const grossSeconds = isVideoStudy ? Math.round(totalSecs * manualPlaybackSpeed) : totalSecs;
 
@@ -759,6 +767,7 @@ export const TimerTab: React.FC<TimerTabProps> = ({
     manualMarkPdfRead,
     subjects,
     activeWorkspaceId,
+    activeBlockId,
     onSessionSaved,
   ]);
 
@@ -1165,7 +1174,7 @@ export const TimerTab: React.FC<TimerTabProps> = ({
                     {timerMode === 'countdown' ? 'Tempo Restante' : 'Tempo Líquido Estudado'}
                   </span>
                   <div style={{
-                    fontSize: 'clamp(3.5rem, 8vw, 6rem)',
+                    fontSize: 'clamp(2.25rem, 11vw, 5.5rem)',
                     fontWeight: '900',
                     fontVariantNumeric: 'tabular-nums',
                     letterSpacing: '2px',
@@ -1214,7 +1223,7 @@ export const TimerTab: React.FC<TimerTabProps> = ({
                   <button
                     onClick={handleReset}
                     disabled={!isActive && displaySeconds === 0}
-                    className="theme-toggle"
+                    className="icon-btn-secondary"
                     style={{ width: '3.5rem', height: '3.5rem', borderRadius: '12px' }}
                     title="Reiniciar cronômetro"
                   >
@@ -1408,13 +1417,14 @@ export const TimerTab: React.FC<TimerTabProps> = ({
                 </div>
 
                 {manualSubtopicId && (
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', marginTop: '2px' }}>
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', marginTop: '4px' }}>
                     <input 
                       type="checkbox"
                       checked={manualMarkVideoWatched}
                       onChange={(e) => setManualMarkVideoWatched(e.target.checked)}
+                      style={{ marginTop: '2px', flexShrink: 0, cursor: 'pointer' }}
                     />
-                    Marcar videoaula como assistida no Edital Verticalizado
+                    <span>Marcar videoaula como assistida no Edital Verticalizado</span>
                   </label>
                 )}
               </div>
@@ -1447,13 +1457,14 @@ export const TimerTab: React.FC<TimerTabProps> = ({
                 </div>
 
                 {manualSubtopicId && (
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', marginTop: '2px' }}>
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', marginTop: '4px' }}>
                     <input 
                       type="checkbox"
                       checked={manualMarkPdfRead}
                       onChange={(e) => setManualMarkPdfRead(e.target.checked)}
+                      style={{ marginTop: '2px', flexShrink: 0, cursor: 'pointer' }}
                     />
-                    Marcar PDF como lido no Edital Verticalizado
+                    <span>Marcar PDF como lido no Edital Verticalizado</span>
                   </label>
                 )}
               </div>
@@ -1476,13 +1487,14 @@ export const TimerTab: React.FC<TimerTabProps> = ({
                   ))}
                 </select>
                 {manualSubtopicId && (
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', marginTop: '6px' }}>
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', marginTop: '6px' }}>
                     <input 
                       type="checkbox"
                       checked={manualMarkCompleted}
                       onChange={(e) => setManualMarkCompleted(e.target.checked)}
+                      style={{ marginTop: '2px', flexShrink: 0, cursor: 'pointer' }}
                     />
-                    Marcar subtópico geral como concluído no Edital Verticalizado
+                    <span>Marcar subtópico geral como concluído no Edital Verticalizado</span>
                   </label>
                 )}
               </div>
@@ -1810,13 +1822,14 @@ export const TimerTab: React.FC<TimerTabProps> = ({
             </div>
 
             {subtopicId && (
-              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer' }}>
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer' }}>
                 <input 
                   type="checkbox"
                   checked={markSubtopicCompleted}
                   onChange={(e) => setMarkSubtopicCompleted(e.target.checked)}
+                  style={{ marginTop: '2px', flexShrink: 0, cursor: 'pointer' }}
                 />
-                Marcar subtópico geral como concluído no Edital Verticalizado
+                <span>Marcar subtópico geral como concluído no Edital Verticalizado</span>
               </label>
             )}
 
@@ -1879,13 +1892,14 @@ export const TimerTab: React.FC<TimerTabProps> = ({
                 </div>
 
                 {subtopicId && (
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', marginTop: '2px' }}>
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', marginTop: '2px' }}>
                     <input 
                       type="checkbox"
                       checked={markVideoWatched}
                       onChange={(e) => setMarkVideoWatched(e.target.checked)}
+                      style={{ marginTop: '2px', flexShrink: 0, cursor: 'pointer' }}
                     />
-                    Marcar videoaula como assistida no Edital Verticalizado
+                    <span>Marcar videoaula como assistida no Edital Verticalizado</span>
                   </label>
                 )}
               </div>
@@ -1918,13 +1932,14 @@ export const TimerTab: React.FC<TimerTabProps> = ({
                 </div>
 
                 {subtopicId && (
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', marginTop: '2px' }}>
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', marginTop: '2px' }}>
                     <input 
                       type="checkbox"
                       checked={markPdfRead}
                       onChange={(e) => setMarkPdfRead(e.target.checked)}
+                      style={{ marginTop: '2px', flexShrink: 0, cursor: 'pointer' }}
                     />
-                    Marcar PDF como lido no Edital Verticalizado
+                    <span>Marcar PDF como lido no Edital Verticalizado</span>
                   </label>
                 )}
               </div>
@@ -2037,7 +2052,7 @@ export const TimerTab: React.FC<TimerTabProps> = ({
         const h = typeof manualHours === 'number' ? manualHours : 0;
         const m = typeof manualMinutes === 'number' ? manualMinutes : 0;
         const totalSecs = (h * 3600) + (m * 60);
-        const isVideoStudy = manualStudyType === 'videoaula' || manualStudyType === 'teoria';
+        const isVideoStudy = manualStudyType === 'videoaula';
         const isPdfStudy = manualStudyType === 'pdf';
         const ac = typeof manualAcertos === 'number' ? manualAcertos : 0;
         const er = typeof manualErros === 'number' ? manualErros : 0;

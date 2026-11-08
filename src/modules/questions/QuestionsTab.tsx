@@ -752,13 +752,14 @@ export const QuestionsTab: React.FC<QuestionsTabProps> = ({ activeWorkspaceId, o
                   border: '1px dashed rgba(239, 68, 68, 0.2)',
                   animation: 'fadeInTab 0.2s ease-out'
                 }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 'bold', color: 'var(--text-title)' }}>
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 'bold', color: 'var(--text-title)' }}>
                     <input
                       type="checkbox"
                       checked={adicionarParaRevisao}
                       onChange={(e) => setAdicionarParaRevisao(e.target.checked)}
+                      style={{ marginTop: '2px', flexShrink: 0, cursor: 'pointer' }}
                     />
-                    Adicionar ao Caderno de Erros?
+                    <span>Adicionar ao Caderno de Erros?</span>
                   </label>
 
                   {adicionarParaRevisao && (
