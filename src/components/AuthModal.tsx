@@ -177,8 +177,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               borderRadius: '20px',
               fontSize: '0.75rem',
               fontWeight: 600,
-              backgroundColor: !isDemoMode ? 'rgba(34, 197, 94, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-              color: !isDemoMode ? '#10b981' : '#f59e0b',
+              backgroundColor: !isDemoMode ? 'rgba(34, 197, 94, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+              color: !isDemoMode ? '#10b981' : '#ef4444',
             }}
           >
             {!isDemoMode ? (
@@ -189,7 +189,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             ) : (
               <>
                 <Database size={13} />
-                <span>Modo Local / Demonstração Ativo</span>
+                <span>Supabase Desconectado (Falta Configurar Vercel)</span>
               </>
             )}
           </div>

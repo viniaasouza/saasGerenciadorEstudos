@@ -193,13 +193,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         // Brand new user or no cloud row yet: push existing local state ONLY if genuine study data exists
         if (hasGenuineStudyData(localSnapshot)) {
-          await supabase
+          const { error: initialPushError } = await supabase
             .from('user_sync_data')
             .upsert({
               user_id: userId,
               payload: localSnapshot,
               updated_at: new Date().toISOString(),
             }, { onConflict: 'user_id' });
+
+          if (initialPushError) {
+            console.warn('Supabase initial upload error:', initialPushError.message);
+            setSyncStatus('error');
+            return;
+          }
         }
         setSyncStatus('synced');
       }
@@ -341,16 +347,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
     } else {
       // Local fallback mode (offline / unconfigured Supabase)
-      const savedUser = safeJsonParse<AppUser | null>(localStorage.getItem(KEYS.CURRENT_USER), null);
-      if (savedUser) {
-        db.migrateGuestData(null, savedUser.id);
-        db.setCurrentUserId(savedUser.id);
-        setUser(savedUser);
-      } else {
-        // Strict Auth Wall: unauthenticated visitors remain null; do NOT auto-login as demo student
-        db.setCurrentUserId(null);
-        setUser(null);
-      }
+      // Strict database-only access: purge unverified local sessions when Supabase is not configured
+      db.setCurrentUserId(null);
+      setUser(null);
+      localStorage.removeItem(KEYS.CURRENT_USER);
       setIsLoading(false);
     }
   }, [pullFromCloud, fetchCloudFeedbacks, fetchCloudProfiles]);
@@ -527,34 +527,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           fetchCloudProfiles();
           return { success: true };
         }
+        return { success: false, error: 'Não foi possível autenticar sua conta no Supabase.' };
       }
 
-      // Mock Local Auth fallback
-      const mockList = safeJsonParse<AppUser[]>(localStorage.getItem(KEYS.MOCK_USERS), []);
-      const activeList = mockList.length > 0 ? mockList : INITIAL_MOCK_USERS;
-      let matched = activeList.find((u) => u.email.toLowerCase() === cleanEmail);
-
-      if (!matched) {
-        // Create user on the fly if not existing in mock mode
-        const role: 'admin' | 'user' = cleanEmail === DEFAULT_ADMIN_EMAIL ? 'admin' : 'user';
-        matched = {
-          id: `usr-${Date.now()}`,
-          email: cleanEmail,
-          name: cleanEmail.split('@')[0],
-          role,
-          createdAt: new Date().toISOString(),
-          provider: 'local',
-        };
-        const updated = [...mockList, matched];
-        localStorage.setItem(KEYS.MOCK_USERS, JSON.stringify(updated));
-        setAllUsers(updated);
-      }
-
-      db.migrateGuestData(null, matched.id);
-      db.setCurrentUserId(matched.id);
-      setUser(matched);
-      localStorage.setItem(KEYS.CURRENT_USER, JSON.stringify(matched));
-      return { success: true };
+      return {
+        success: false,
+        error: 'Banco de dados Supabase não conectado neste dispositivo/servidor. Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY nas variáveis de ambiente da Vercel e faça Redeploy.',
+      };
     } catch (err: unknown) {
       return { success: false, error: formatSafeError(err) };
     }
@@ -591,6 +570,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return { success: false, error: formatSafeError(error.message) };
         }
 
+        if (data.user && !data.session) {
+          return {
+            success: false,
+            error: 'Conta criada! Verifique seu e-mail para confirmar o cadastro antes de entrar (ou desative "Confirm email" no painel do Supabase).',
+          };
+        }
+
         if (data.user) {
           const appUser: AppUser = {
             id: data.user.id,
@@ -610,31 +596,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
-      // Mock Local Auth fallback
-      const mockList = safeJsonParse<AppUser[]>(localStorage.getItem(KEYS.MOCK_USERS), []);
-      const activeList = mockList.length > 0 ? mockList : INITIAL_MOCK_USERS;
-      if (activeList.some((u) => u.email.toLowerCase() === cleanEmail)) {
-        return { success: false, error: 'Este e-mail já está cadastrado. Tente entrar.' };
-      }
-
-      const role: 'admin' | 'user' = cleanEmail === DEFAULT_ADMIN_EMAIL ? 'admin' : 'user';
-      const newUser: AppUser = {
-        id: `usr-${Date.now()}`,
-        email: cleanEmail,
-        name: cleanName,
-        role,
-        createdAt: new Date().toISOString(),
-        provider: 'local',
+      return {
+        success: false,
+        error: 'Banco de dados Supabase não conectado neste dispositivo/servidor. Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY nas variáveis de ambiente da Vercel e faça Redeploy.',
       };
-
-      const updated = [...mockList, newUser];
-      localStorage.setItem(KEYS.MOCK_USERS, JSON.stringify(updated));
-      setAllUsers(updated);
-      db.migrateGuestData(null, newUser.id);
-      db.setCurrentUserId(newUser.id);
-      setUser(newUser);
-      localStorage.setItem(KEYS.CURRENT_USER, JSON.stringify(newUser));
-      return { success: true };
     } catch (err: unknown) {
       return { success: false, error: formatSafeError(err) };
     }
