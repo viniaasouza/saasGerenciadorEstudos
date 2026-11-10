@@ -72,9 +72,10 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   };
 
   return (
-    <div className="landing-container" style={{ minHeight: '100vh', backgroundColor: 'var(--bg-main)', color: 'var(--text-main)' }}>
+    <div className="landing-container" style={{ backgroundColor: 'var(--bg-main)', color: 'var(--text-main)' }}>
       {/* Top Navbar */}
       <header
+        className="landing-header"
         style={{
           display: 'flex',
           justifyContent: 'space-between',
@@ -83,17 +84,19 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           maxWidth: '1280px',
           margin: '0 auto',
           borderBottom: '1px solid var(--border-color)',
+          width: '100%',
+          boxSizing: 'border-box',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <InfiniteBookLogo size={36} />
-          <div>
-            <div style={{ fontSize: '1.25rem', fontWeight: 900, letterSpacing: '-0.5px' }}>ixtude.ai</div>
-            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>Ciclo & Edital Inteligente</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', minWidth: 0, flexShrink: 0 }}>
+          <InfiniteBookLogo size={34} />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: '1.15rem', fontWeight: 900, letterSpacing: '-0.5px', whiteSpace: 'nowrap' }}>ixtude.ai</div>
+            <div className="hide-mobile" style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>Ciclo & Edital Inteligente</div>
           </div>
         </div>
 
-        <nav style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        <nav className="landing-nav" style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexShrink: 0 }}>
           <a
             href="#problema"
             className="hide-mobile"
@@ -118,11 +121,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
           <button
             onClick={onOpenFeedback}
-            className="mock-btn text-muted"
+            className="mock-btn text-muted landing-nav-btn"
             style={{ fontSize: '0.85rem', padding: '0.5rem 0.9rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+            title="Enviar Feedback"
+            aria-label="Feedback"
           >
             <MessageSquare size={14} />
-            <span>Feedback</span>
+            <span className="hide-mobile">Feedback</span>
           </button>
 
           {user ? (
@@ -130,7 +135,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               onClick={() => {
                 if (user) onEnterApp();
               }}
-              className="mock-btn"
+              className="mock-btn landing-nav-btn"
               style={{
                 fontSize: '0.85rem',
                 padding: '0.55rem 1.25rem',
@@ -144,21 +149,22 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               <ArrowRight size={14} />
             </button>
           ) : (
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', gap: '0.45rem', alignItems: 'center' }}>
               <button
                 onClick={() => onOpenAuth('login')}
-                className="mock-btn text-muted"
-                style={{ fontSize: '0.85rem', padding: '0.55rem 1rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+                className="mock-btn text-muted landing-nav-btn"
+                style={{ fontSize: '0.85rem', padding: '0.55rem 0.9rem', display: 'flex', alignItems: 'center', gap: '5px' }}
               >
                 <LogIn size={14} />
                 <span>Entrar</span>
               </button>
               <button
                 onClick={() => onOpenAuth('signup')}
-                className="mock-btn"
-                style={{ fontSize: '0.85rem', padding: '0.55rem 1.1rem', fontWeight: 700 }}
+                className="mock-btn landing-nav-btn"
+                style={{ fontSize: '0.85rem', padding: '0.55rem 1rem', fontWeight: 700, whiteSpace: 'nowrap' }}
               >
-                Cadastre-se Grátis
+                <span>Cadastrar</span>
+                <span className="hide-mobile">-se Grátis</span>
               </button>
             </div>
           )}
@@ -166,7 +172,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </header>
 
       {/* Hero Section */}
-      <section style={{ maxWidth: '1080px', margin: '0 auto', padding: '4.5rem 1.5rem 3rem', textAlign: 'center' }}>
+      <section className="landing-hero" style={{ maxWidth: '1080px', margin: '0 auto', padding: '4.5rem 1.5rem 3rem', textAlign: 'center' }}>
         <div
           style={{
             display: 'inline-flex',
@@ -242,7 +248,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           </button>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '2rem', marginTop: '2rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: '0.85rem 1.75rem', marginTop: '2rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <CheckCircle2 size={16} color="#10b981" />
             <span>Sem cartão de crédito</span>
@@ -365,7 +371,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </p>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '2rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: '1.5rem' }}>
             <div style={{ textAlign: 'center', padding: '1.5rem' }}>
               <div
                 style={{
@@ -448,8 +454,8 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       </section>
 
       {/* Free AI Prompt Interactive Section */}
-      <section id="edital-ia" style={{ maxWidth: '1080px', margin: '4rem auto', padding: '0 1.5rem' }}>
-        <div className="card-primary" style={{ padding: '2.5rem', borderRadius: '20px', border: '1px solid var(--border-color)' }}>
+      <section id="edital-ia" className="landing-section" style={{ maxWidth: '1080px', margin: '4rem auto', padding: '0 1.5rem' }}>
+        <div className="card-primary landing-prompt-card" style={{ padding: '2.5rem', borderRadius: '20px', border: '1px solid var(--border-color)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1.5rem', marginBottom: '1.5rem' }}>
             <div>
               <div

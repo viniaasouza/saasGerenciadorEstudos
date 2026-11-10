@@ -1,12 +1,25 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
+// Normalize Supabase URL to pure origin (strips accidental /rest/v1, /auth/v1, or trailing slashes)
+const normalizeSupabaseUrl = (raw: string): string => {
+  const clean = raw.trim().replace(/\/+$/, '');
+  if (!clean || !clean.startsWith('http')) return clean;
+  try {
+    const parsed = new URL(clean);
+    if (parsed.hostname.includes('supabase.co') || parsed.hostname.includes('supabase.in')) {
+      return parsed.origin;
+    }
+  } catch {}
+  return clean;
+};
+
 // Environment variables or custom user-configured credentials for Supabase
 const getEnvUrl = () => {
   let url = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL) || '';
   if ((!url || url.includes('placeholder')) && typeof localStorage !== 'undefined') {
     url = localStorage.getItem('ixtude_supabase_url') || '';
   }
-  return url.trim();
+  return normalizeSupabaseUrl(url);
 };
 
 const getEnvKey = () => {
