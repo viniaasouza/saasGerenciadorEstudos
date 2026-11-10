@@ -1,8 +1,8 @@
 /* eslint-disable react-refresh/only-export-components */
-import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { sanitizeString, isValidEmail, formatSafeError, safeJsonParse } from '../lib/security';
-import { db } from '../db/database';
+import { db, hasGenuineStudyData, type FullBackup } from '../db/database';
 
 export interface AppUser {
   id: string;
@@ -73,80 +73,62 @@ const KEYS = {
 
 const DEFAULT_ADMIN_EMAIL = (import.meta.env.VITE_ADMIN_EMAIL || 'admin@ixtude-ai.com.br').toLowerCase().trim();
 
-// Seed initial mock users if none exist in localStorage
+const INITIAL_MOCK_USERS: AppUser[] = [
+  {
+    id: 'usr-admin-default',
+    email: DEFAULT_ADMIN_EMAIL,
+    name: 'Administrador ixtude.ai',
+    role: 'admin',
+    createdAt: new Date().toISOString(),
+    provider: 'local',
+  },
+  {
+    id: 'usr-demo-student',
+    email: 'aluno@ixtude-ai.com.br',
+    name: 'Concurseiro Focado',
+    role: 'user',
+    createdAt: new Date().toISOString(),
+    provider: 'local',
+  },
+];
+
+// Read mock users without eagerly writing to localStorage on unauthenticated visits
 const initializeMockUsers = (): AppUser[] => {
   const existing = safeJsonParse<AppUser[]>(localStorage.getItem(KEYS.MOCK_USERS), []);
   if (existing.length > 0) return existing;
-
-  const initialUsers: AppUser[] = [
-    {
-      id: 'usr-admin-default',
-      email: DEFAULT_ADMIN_EMAIL,
-      name: 'Administrador ixtude.ai',
-      role: 'admin',
-      createdAt: new Date().toISOString(),
-      provider: 'local',
-    },
-    {
-      id: 'usr-demo-student',
-      email: 'aluno@ixtude-ai.com.br',
-      name: 'Concurseiro Focado',
-      role: 'user',
-      createdAt: new Date().toISOString(),
-      provider: 'local',
-    },
-  ];
-
-  localStorage.setItem(KEYS.MOCK_USERS, JSON.stringify(initialUsers));
-  return initialUsers;
+  return INITIAL_MOCK_USERS;
 };
 
-// Initial seed feedbacks
+const INITIAL_FEEDBACKS: FeedbackItem[] = [
+  {
+    id: 'fb-sample-1',
+    userId: 'usr-demo-student',
+    userName: 'Concurseiro Focado',
+    userEmail: 'aluno@ixtude-ai.com.br',
+    type: 'sugestao',
+    title: 'Adicionar filtro por Banca no Edital Verticalizado',
+    description: 'Adorei a importação automática do edital com IA! Seria ótimo ter filtro rápido por banca Cebraspe/FCC nas questões.',
+    status: 'resolvido',
+    createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
+  },
+  {
+    id: 'fb-sample-2',
+    userId: 'usr-demo-student',
+    userName: 'Concurseiro Focado',
+    userEmail: 'aluno@ixtude-ai.com.br',
+    type: 'bug',
+    title: 'Pequena inconsistência de cores no modo escuro',
+    description: 'Em telas menores, o badge de dias restantes estava com contraste baixo no modo escuro.',
+    status: 'resolvido',
+    createdAt: new Date(Date.now() - 86400000).toISOString(),
+  },
+];
+
+// Read feedbacks without eagerly writing to localStorage on unauthenticated visits
 const initializeFeedbacks = (): FeedbackItem[] => {
   const existing = safeJsonParse<FeedbackItem[]>(localStorage.getItem(KEYS.FEEDBACKS), []);
-  if (existing.length > 0) {
-    let changed = false;
-    const updated = existing.map((f) => {
-      if (f.id === 'fb-sample-2' && f.status !== 'resolvido') {
-        changed = true;
-        return { ...f, status: 'resolvido' as const };
-      }
-      return f;
-    });
-    if (changed) {
-      localStorage.setItem(KEYS.FEEDBACKS, JSON.stringify(updated));
-      return updated;
-    }
-    return existing;
-  }
-
-  const initialFeedbacks: FeedbackItem[] = [
-    {
-      id: 'fb-sample-1',
-      userId: 'usr-demo-student',
-      userName: 'Concurseiro Focado',
-      userEmail: 'aluno@ixtude-ai.com.br',
-      type: 'sugestao',
-      title: 'Adicionar filtro por Banca no Edital Verticalizado',
-      description: 'Adorei a importação automática do edital com IA! Seria ótimo ter filtro rápido por banca Cebraspe/FCC nas questões.',
-      status: 'resolvido',
-      createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-    },
-    {
-      id: 'fb-sample-2',
-      userId: 'usr-demo-student',
-      userName: 'Concurseiro Focado',
-      userEmail: 'aluno@ixtude-ai.com.br',
-      type: 'bug',
-      title: 'Pequena inconsistência de cores no modo escuro',
-      description: 'Em telas menores, o badge de dias restantes estava com contraste baixo no modo escuro.',
-      status: 'resolvido',
-      createdAt: new Date(Date.now() - 86400000).toISOString(),
-    },
-  ];
-
-  localStorage.setItem(KEYS.FEEDBACKS, JSON.stringify(initialFeedbacks));
-  return initialFeedbacks;
+  if (existing.length > 0) return existing;
+  return INITIAL_FEEDBACKS;
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -155,6 +137,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [allUsers, setAllUsers] = useState<AppUser[]>([]);
   const [feedbacks, setFeedbacks] = useState<FeedbackItem[]>([]);
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
+  const isPullingRef = useRef<boolean>(false);
+  const lastFocusReconcileRef = useRef<number>(0);
 
   const isDemoMode = !isSupabaseConfigured();
 
@@ -164,6 +148,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setSyncStatus('idle');
       return;
     }
+    isPullingRef.current = true;
     try {
       setSyncStatus('syncing');
       db.migrateGuestData(null, userId);
@@ -184,7 +169,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      const localSnapshot = JSON.parse(db.exportAllData());
+      const localSnapshot: FullBackup = JSON.parse(db.exportAllData());
 
       if (data?.payload) {
         // Non-destructive merge of local cache and cloud snapshot
@@ -206,8 +191,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setSyncStatus('synced');
         }
       } else {
-        // Brand new user or no cloud row yet: push existing local state
-        if (localSnapshot.workspaces && localSnapshot.workspaces.length > 0) {
+        // Brand new user or no cloud row yet: push existing local state ONLY if genuine study data exists
+        if (hasGenuineStudyData(localSnapshot)) {
           await supabase
             .from('user_sync_data')
             .upsert({
@@ -221,6 +206,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {
       // Fallback silently to local cache if network is unavailable
       setSyncStatus(navigator.onLine ? 'error' : 'offline');
+    } finally {
+      isPullingRef.current = false;
     }
   }, []);
 
@@ -309,13 +296,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           fetchCloudFeedbacks();
           fetchCloudProfiles();
         } else {
-          // Restore local saved session if any
-          const savedUser = safeJsonParse<AppUser | null>(localStorage.getItem(KEYS.CURRENT_USER), null);
-          if (savedUser) {
-            db.migrateGuestData(null, savedUser.id);
-            db.setCurrentUserId(savedUser.id);
-            setUser(savedUser);
-          }
+          // Mandatory Auth Wall: Supabase session is null -> user must be null, purge stale local session
+          db.setCurrentUserId(null);
+          setUser(null);
+          localStorage.removeItem(KEYS.CURRENT_USER);
         }
         setIsLoading(false);
       });
@@ -356,21 +340,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         subscription.unsubscribe();
       };
     } else {
-      // Local demo mode
+      // Local fallback mode (offline / unconfigured Supabase)
       const savedUser = safeJsonParse<AppUser | null>(localStorage.getItem(KEYS.CURRENT_USER), null);
       if (savedUser) {
         db.migrateGuestData(null, savedUser.id);
         db.setCurrentUserId(savedUser.id);
         setUser(savedUser);
       } else {
-        // Auto-login as demo user by default for instant zero-barrier experience
-        const defaultStudent = loadedUsers.find((u) => u.role === 'user') || loadedUsers[0];
-        if (defaultStudent) {
-          db.migrateGuestData(null, defaultStudent.id);
-          db.setCurrentUserId(defaultStudent.id);
-          setUser(defaultStudent);
-          localStorage.setItem(KEYS.CURRENT_USER, JSON.stringify(defaultStudent));
-        }
+        // Strict Auth Wall: unauthenticated visitors remain null; do NOT auto-login as demo student
+        db.setCurrentUserId(null);
+        setUser(null);
       }
       setIsLoading(false);
     }
@@ -385,9 +364,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let timer: ReturnType<typeof setTimeout> | null = null;
 
     const handleMutation = () => {
+      if (isPullingRef.current) return;
       setSyncStatus('syncing');
       if (timer) clearTimeout(timer);
       timer = setTimeout(async () => {
+        if (isPullingRef.current) return;
         try {
           if (typeof navigator !== 'undefined' && !navigator.onLine) {
             setSyncStatus('offline');
@@ -398,7 +379,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (!client) return;
 
           const backupJson = db.exportAllData();
-          const payload = JSON.parse(backupJson);
+          const payload: FullBackup = JSON.parse(backupJson);
+
+          // Anti-Wipe Protection: Do not push blank state over cloud
+          if (!hasGenuineStudyData(payload)) {
+            setSyncStatus('synced');
+            return;
+          }
 
           const { error } = await client
             .from('user_sync_data')
@@ -422,7 +409,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubscribe = db.subscribe(handleMutation);
 
     const onOnline = () => {
-      handleMutation();
+      // When coming back online, pull latest cloud state rather than pushing potentially stale local cache
+      pullFromCloud(user.id);
     };
     const onOffline = () => {
       setSyncStatus('offline');
@@ -441,7 +429,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         window.removeEventListener('offline', onOffline);
       }
     };
-  }, [user]);
+  }, [user, pullFromCloud]);
+
+  // Window Focus / Tab Switch Auto-Reconciliation with 12s throttling
+  useEffect(() => {
+    if (!user || user.provider === 'local' || !isSupabaseConfigured() || !supabase) {
+      return;
+    }
+
+    const FOCUS_COOLDOWN_MS = 12000; // 12 seconds cooldown between focus syncs
+
+    const triggerFocusReconciliation = () => {
+      const now = Date.now();
+      if (now - lastFocusReconcileRef.current < FOCUS_COOLDOWN_MS) {
+        return;
+      }
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        return;
+      }
+      if (isPullingRef.current) {
+        return;
+      }
+
+      lastFocusReconcileRef.current = now;
+      pullFromCloud(user.id);
+    };
+
+    const handleFocus = () => {
+      triggerFocusReconciliation();
+    };
+
+    const handleVisibilityChange = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        triggerFocusReconciliation();
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', handleFocus);
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('focus', handleFocus);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
+    };
+  }, [user, pullFromCloud]);
 
   const isAdmin = useMemo(() => {
     if (!user) return false;
@@ -496,7 +531,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Mock Local Auth fallback
       const mockList = safeJsonParse<AppUser[]>(localStorage.getItem(KEYS.MOCK_USERS), []);
-      let matched = mockList.find((u) => u.email.toLowerCase() === cleanEmail);
+      const activeList = mockList.length > 0 ? mockList : INITIAL_MOCK_USERS;
+      let matched = activeList.find((u) => u.email.toLowerCase() === cleanEmail);
 
       if (!matched) {
         // Create user on the fly if not existing in mock mode
@@ -569,13 +605,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(appUser);
           localStorage.setItem(KEYS.CURRENT_USER, JSON.stringify(appUser));
           fetchCloudProfiles();
+          await pullFromCloud(appUser.id);
           return { success: true };
         }
       }
 
       // Mock Local Auth fallback
       const mockList = safeJsonParse<AppUser[]>(localStorage.getItem(KEYS.MOCK_USERS), []);
-      if (mockList.some((u) => u.email.toLowerCase() === cleanEmail)) {
+      const activeList = mockList.length > 0 ? mockList : INITIAL_MOCK_USERS;
+      if (activeList.some((u) => u.email.toLowerCase() === cleanEmail)) {
         return { success: false, error: 'Este e-mail já está cadastrado. Tente entrar.' };
       }
 
@@ -600,7 +638,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err: unknown) {
       return { success: false, error: formatSafeError(err) };
     }
-  }, [fetchCloudProfiles]);
+  }, [fetchCloudProfiles, pullFromCloud]);
 
   // Sign Out
   const signOut = useCallback(async () => {

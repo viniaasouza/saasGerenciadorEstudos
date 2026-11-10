@@ -127,7 +127,9 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
           {user ? (
             <button
-              onClick={onEnterApp}
+              onClick={() => {
+                if (user) onEnterApp();
+              }}
               className="mock-btn"
               style={{
                 fontSize: '0.85rem',
@@ -237,18 +239,6 @@ export const LandingPage: React.FC<LandingPageProps> = ({
           >
             <span>{user ? 'Acessar Plataforma' : 'Começar Agora — É 100% Grátis'}</span>
             <ArrowRight size={18} />
-          </button>
-
-          <button
-            onClick={onEnterApp}
-            className="mock-btn text-muted"
-            style={{
-              fontSize: '1.05rem',
-              padding: '1rem 1.8rem',
-              borderRadius: '12px',
-            }}
-          >
-            Explorar Sem Cadastro (Demo)
           </button>
         </div>
 
@@ -526,7 +516,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               Depois de copiar a resposta da IA, basta colar dentro do botão "Importar Edital com IA" no aplicativo!
             </span>
             <button
-              onClick={onEnterApp}
+              onClick={() => {
+                if (user) {
+                  onEnterApp();
+                } else {
+                  onOpenAuth('signup');
+                }
+              }}
               className="mock-btn text-muted"
               style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}
             >
@@ -621,7 +617,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               Reportar Bug / Feedback
             </button>
             <button
-              onClick={onEnterApp}
+              onClick={() => {
+                if (user) {
+                  onEnterApp();
+                } else {
+                  onOpenAuth('login');
+                }
+              }}
               style={{ background: 'none', border: 'none', color: 'var(--color-accent)', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}
             >
               Acessar Painel

@@ -25,7 +25,7 @@ import type { CicloWorkspace, ConcursoInfo } from './types';
 import './index.css';
 
 function App() {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, syncStatus } = useAuth();
 
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     const saved = localStorage.getItem('concurso_estudos_theme');
@@ -33,13 +33,22 @@ function App() {
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   });
 
-  // Landing Page toggle state
+  // Landing Page toggle state: unauthenticated visitors always start on Landing Page
   const [showLandingPage, setShowLandingPage] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
+    if (typeof window === 'undefined') return true;
     if (window.location.hash === '#landing') return true;
+    const savedUser = localStorage.getItem('estud_ai_auth_user');
     const hasEntered = localStorage.getItem('estud_ai_entered_app');
-    return !hasEntered;
+    return !(savedUser && hasEntered);
   });
+
+  // Strict Auth Wall: Unauthenticated users MUST stay on landing page
+  useEffect(() => {
+    if (!user) {
+      setShowLandingPage(true);
+      localStorage.removeItem('estud_ai_entered_app');
+    }
+  }, [user]);
 
   const [activeTab, setActiveTab] = useState<string>('autopilot');
 
@@ -96,14 +105,27 @@ function App() {
   // Clean Workspace Initialization effect — reacts to logged-in user changes for multi-user isolation
   const userId = user?.id;
   useEffect(() => {
-    if (userId) {
-      db.migrateGuestData(null, userId);
+    if (!userId) {
+      // Zero LocalStorage Mock Data for Unauthenticated Visitors
+      db.setCurrentUserId(null);
+      setWorkspaces([]);
+      setActiveWorkspaceId('');
+      setSelectedBlockForTimer(null);
+      setActiveBlockId(null);
+      setPromotionCandidate(null);
+      return;
     }
-    db.setCurrentUserId(userId || null);
+
+    db.migrateGuestData(null, userId);
+    db.setCurrentUserId(userId);
     let wsList = db.getWorkspaces();
     let activeId = db.getActiveWorkspaceId();
 
     if (wsList.length === 0) {
+      if (syncStatus === 'syncing') {
+        // Cloud pull is actively in progress: defer creating default workspace until cloud state converges
+        return;
+      }
       const defaultWs: CicloWorkspace = {
         id: `workspace-${Date.now()}`,
         name: 'Meu Concurso',
@@ -126,8 +148,10 @@ function App() {
     }
 
     if (!activeId || !wsList.some((w) => w.id === activeId)) {
-      activeId = wsList[0].id;
-      db.setActiveWorkspaceId(activeId);
+      activeId = wsList[0]?.id || '';
+      if (activeId) {
+        db.setActiveWorkspaceId(activeId);
+      }
     }
 
     setWorkspaces(wsList);
@@ -136,11 +160,12 @@ function App() {
     setActiveBlockId(null);
     setPromotionCandidate(null);
     setRefreshStatsTrigger((p) => p + 1);
-  }, [userId]);
+  }, [userId, syncStatus]);
 
   // Reactively sync workspace list when background cloud synchronization converges
   useEffect(() => {
     const unsubscribe = db.subscribe(() => {
+      if (!user) return;
       const updatedWs = db.getWorkspaces();
       if (updatedWs.length > 0) {
         setWorkspaces(updatedWs);
@@ -152,7 +177,7 @@ function App() {
       setRefreshStatsTrigger((p) => p + 1);
     });
     return () => unsubscribe();
-  }, []);
+  }, [user]);
 
   // Recalculate study stats for the active workspace in the header badge
   useEffect(() => {
@@ -176,6 +201,12 @@ function App() {
   };
 
   const handleEnterApp = () => {
+    const hasAuth = !!user || !!localStorage.getItem('estud_ai_auth_user');
+    if (!hasAuth) {
+      setAuthModalMode('signup');
+      setIsAuthModalOpen(true);
+      return;
+    }
     localStorage.setItem('estud_ai_entered_app', 'true');
     setShowLandingPage(false);
   };
@@ -298,8 +329,8 @@ function App() {
     setConcursoInfo(info);
   }, [activeWorkspaceId, refreshStatsTrigger]);
 
-  // If user opens Landing Page view
-  if (showLandingPage) {
+  // Strict Auth Wall: Unauthenticated visitors NEVER see app-layout
+  if (!user || showLandingPage) {
     return (
       <div className={`app-root ${theme}`}>
         <LandingPage
@@ -481,7 +512,14 @@ function App() {
           onToggleMobileMenu={() => setMobileNavOpen((prev) => !prev)}
         />
         <main className="content-area">
-          <div className="fade-in-tab">{renderActiveTab()}</div>
+          {workspaces.length === 0 && syncStatus === 'syncing' ? (
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-indigo-500 mb-4" />
+              <p className="text-gray-400 text-sm">Sincronizando seus estudos na nuvem...</p>
+            </div>
+          ) : (
+            <div className="fade-in-tab">{renderActiveTab()}</div>
+          )}
         </main>
         <FooterAdBanner onOpenPrivacy={() => setIsTermsModalOpen(true)} />
       </div>

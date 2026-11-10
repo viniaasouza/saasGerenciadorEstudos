@@ -52,6 +52,7 @@ export interface FullBackup {
     autopilotSettings?: AutopilotSettings | null;
   }>;
   gamification?: GamificationProfile | null;
+  activeTimer?: RunningTimerState | null;
   rawKeys?: Record<string, string>;
 }
 
@@ -619,16 +620,24 @@ export const db = {
     }
   },
 
-  saveActiveTimer(timer: RunningTimerState | null): void {
+  saveActiveTimer(timer: RunningTimerState | null, notify: boolean = true): void {
     const key = this.getUserScopedKey('active_timer');
     if (typeof localStorage !== 'undefined') {
       if (!timer) {
         localStorage.removeItem(key);
         localStorage.removeItem(KEYS.ACTIVE_TIMER);
       } else {
-        localStorage.setItem(key, JSON.stringify(timer));
+        const toSave = { ...timer, updatedAt: (timer as any)?.updatedAt || Date.now() };
+        localStorage.setItem(key, JSON.stringify(toSave));
       }
     }
+    if (notify) {
+      this.notifyChange();
+    }
+  },
+
+  clearActiveTimer(notify: boolean = true): void {
+    this.saveActiveTimer(null, notify);
   },
 
   // AUTOPILOT HELPERS & WORKFLOW
@@ -1127,6 +1136,7 @@ export const db = {
       questions,
       workspaceData,
       gamification: this.getGamificationProfile(),
+      activeTimer: this.getActiveTimer(),
       rawKeys,
     };
 
@@ -1301,6 +1311,47 @@ export const db = {
         }
       });
 
+      // Cycle Blocks: Union deduplicated by ID, logical OR on completion, preserve latest progress
+      const blockMap = new Map<string, StudyBlock>();
+      const cloudBlocks: StudyBlock[] = cloudWs.cycleBlocks || [];
+      const localBlocks: StudyBlock[] = localWs.cycleBlocks || [];
+
+      cloudBlocks.forEach((cb: StudyBlock) => {
+        if (cb && cb.id) {
+          blockMap.set(cb.id, { ...cb });
+        }
+      });
+
+      localBlocks.forEach((lb: StudyBlock) => {
+        if (!lb || !lb.id) return;
+        if (!blockMap.has(lb.id)) {
+          blockMap.set(lb.id, { ...lb });
+        } else {
+          const exBlock = blockMap.get(lb.id)!;
+          const wasCompleted = Boolean(exBlock.completed || lb.completed);
+          exBlock.completed = wasCompleted;
+
+          if (lb.completed && lb.completedAt) {
+            if (!exBlock.completedAt || new Date(lb.completedAt) > new Date(exBlock.completedAt)) {
+              exBlock.completedAt = lb.completedAt;
+            }
+          } else if (!exBlock.completedAt && lb.completedAt) {
+            exBlock.completedAt = lb.completedAt;
+          }
+
+          exBlock.durationMinutes = lb.durationMinutes || exBlock.durationMinutes;
+          exBlock.dayAllocated = lb.dayAllocated || exBlock.dayAllocated;
+          exBlock.subjectName = lb.subjectName || exBlock.subjectName;
+          if (lb.order !== undefined) {
+            exBlock.order = lb.order;
+          }
+        }
+      });
+
+      const mergedCycleBlocks = Array.from(blockMap.values()).sort(
+        (a, b) => (a.order || 0) - (b.order || 0)
+      );
+
       mergedWsData[wsId] = {
         ...cloudWs,
         ...localWs,
@@ -1308,7 +1359,7 @@ export const db = {
         flashcards: Array.from(cardMap.values()),
         revisoes: Array.from(revMap.values()),
         cycleConfig: localWs.cycleConfig || cloudWs.cycleConfig || null,
-        cycleBlocks: (localWs.cycleBlocks && localWs.cycleBlocks.length > 0) ? localWs.cycleBlocks : (cloudWs.cycleBlocks || []),
+        cycleBlocks: mergedCycleBlocks,
         cycleWeek: localWs.cycleWeek || cloudWs.cycleWeek || null,
         concursoInfo: (localWs.concursoInfo?.concurso && localWs.concursoInfo?.dataProva)
           ? localWs.concursoInfo
@@ -1351,6 +1402,51 @@ export const db = {
       };
     }
 
+    // 6. Active Stopwatch/Timer Reconciliation (Multi-Device Sync)
+    let mergedActiveTimer: RunningTimerState | null = null;
+    const localTimer = localData.activeTimer;
+    const cloudTimer = cloudData.activeTimer;
+
+    const isTimerValid = (t?: RunningTimerState | null): boolean => {
+      if (!t || !t.isActive) return false;
+      // Guard against stale/zombie timers running for over 24 hours continuously
+      if (!t.isPaused && t.startTime && (Date.now() - t.startTime > 24 * 3600 * 1000)) {
+        return false;
+      }
+      return true;
+    };
+
+    const localValid = isTimerValid(localTimer);
+    const cloudValid = isTimerValid(cloudTimer);
+
+    if (localValid && !cloudValid) {
+      const cloudExportedTime = cloudData.exportedAt ? new Date(cloudData.exportedAt).getTime() : 0;
+      const localTimerTime = (localTimer as any)?.updatedAt || localTimer?.startTime || 0;
+
+      // If cloud snapshot was exported AFTER local timer was started/updated and cloud has no active timer,
+      // it means user completed/saved the study on the other device. Do not resurrect.
+      if (cloudExportedTime > localTimerTime && cloudExportedTime > 0) {
+        mergedActiveTimer = null;
+      } else {
+        mergedActiveTimer = localTimer || null;
+      }
+    } else if (!localValid && cloudValid) {
+      mergedActiveTimer = cloudTimer || null;
+    } else if (localValid && cloudValid) {
+      // Conflict: both have active timers. Take the one with the latest timestamp.
+      const localTime = (localTimer as any)?.updatedAt || localTimer?.startTime || 0;
+      const cloudTime = (cloudTimer as any)?.updatedAt || cloudTimer?.startTime || 0;
+      mergedActiveTimer = (localTime >= cloudTime ? localTimer : cloudTimer) || null;
+    } else {
+      if (localTimer && localTimer.accumulatedSeconds > 0 && (!cloudTimer || localTimer.accumulatedSeconds >= cloudTimer.accumulatedSeconds)) {
+        mergedActiveTimer = localTimer;
+      } else if (cloudTimer && cloudTimer.accumulatedSeconds > 0) {
+        mergedActiveTimer = cloudTimer;
+      } else {
+        mergedActiveTimer = null;
+      }
+    }
+
     return {
       app: 'ixtude.ai',
       version: 2,
@@ -1362,6 +1458,7 @@ export const db = {
       questions: mergedQuestions,
       workspaceData: mergedWsData,
       gamification: mergedGamification,
+      activeTimer: mergedActiveTimer,
     };
   },
 
@@ -1589,6 +1686,15 @@ export const db = {
         this.saveGamificationProfile(data.gamification);
       }
 
+      // 4. Restore active timer state
+      if (data.activeTimer !== undefined) {
+        if (data.activeTimer && data.activeTimer.isActive) {
+          this.saveActiveTimer(data.activeTimer, false);
+        } else {
+          this.clearActiveTimer(false);
+        }
+      }
+
       this.notifyChange();
 
       return {
@@ -1723,5 +1829,79 @@ export const db = {
         localStorage.removeItem(KEYS.GAMIFICATION);
       }
     }
+  },
+
+  hasGenuineStudyData(backup: FullBackup | null | undefined): boolean {
+    return hasGenuineStudyData(backup);
   }
 };
+
+/**
+ * Checks whether a snapshot contains genuine user study data.
+ * Used for zero data loss anti-wipe protection on multi-device synchronization.
+ */
+export function hasGenuineStudyData(backup: FullBackup | null | undefined): boolean {
+  if (!backup || typeof backup !== 'object') {
+    return false;
+  }
+
+  // 1. Study sessions recorded
+  if (Array.isArray(backup.sessions) && backup.sessions.length > 0) {
+    const hasValidSession = backup.sessions.some(
+      (s) => (s.durationSeconds && s.durationSeconds > 0) || Boolean(s.subjectName)
+    );
+    if (hasValidSession) return true;
+  }
+
+  // 2. Questions answered
+  if (Array.isArray(backup.questions) && backup.questions.length > 0) {
+    const hasQuestions = backup.questions.some(
+      (q) => (q.attempted && q.attempted > 0) || (q.correct && q.correct > 0)
+    );
+    if (hasQuestions) return true;
+  }
+
+  // 3. Workspace study data (subjects, flashcards, reviews, completed blocks, contest info)
+  if (backup.workspaceData && typeof backup.workspaceData === 'object') {
+    for (const wsId of Object.keys(backup.workspaceData)) {
+      const data = backup.workspaceData[wsId];
+      if (!data) continue;
+
+      if (Array.isArray(data.subjects) && data.subjects.length > 0) return true;
+      if (Array.isArray(data.flashcards) && data.flashcards.length > 0) return true;
+      if (Array.isArray(data.revisoes) && data.revisoes.length > 0) return true;
+      if (Array.isArray(data.cycleBlocks) && data.cycleBlocks.some((b) => b.completed || b.durationMinutes > 0)) {
+        return true;
+      }
+      if (
+        data.concursoInfo &&
+        (Boolean(data.concursoInfo.concurso?.trim()) ||
+         Boolean(data.concursoInfo.cargo?.trim()) ||
+         Boolean(data.concursoInfo.banca?.trim()))
+      ) {
+        return true;
+      }
+    }
+  }
+
+  // 4. Multiple workspaces or custom workspace name (not blank and not default "Meu Concurso")
+  if (Array.isArray(backup.workspaces) && backup.workspaces.length > 0) {
+    if (backup.workspaces.length > 1) return true;
+    const ws = backup.workspaces[0];
+    if (ws && ws.name && ws.name.trim() !== 'Meu Concurso' && ws.name.trim() !== '') {
+      return true;
+    }
+  }
+
+  // 5. Active timer running or accumulated time
+  if (backup.activeTimer && (backup.activeTimer.isActive || backup.activeTimer.accumulatedSeconds > 0)) {
+    return true;
+  }
+
+  // 6. Gamification XP earned
+  if (backup.gamification && ((backup.gamification.totalXp && backup.gamification.totalXp > 0) || (backup.gamification.currentStreak && backup.gamification.currentStreak > 0))) {
+    return true;
+  }
+
+  return false;
+}

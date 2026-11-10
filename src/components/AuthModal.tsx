@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { X, LogIn, UserPlus, Sparkles, Cloud, Database, AlertCircle, CheckCircle2, Download } from 'lucide-react';
+import { X, LogIn, UserPlus, Cloud, Database, AlertCircle, CheckCircle2, Download } from 'lucide-react';
 import { db } from '../db/database';
 
 interface AuthModalProps {
@@ -16,7 +16,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   initialMode = 'login',
   onSuccess,
 }) => {
-  const { signIn, signUp, loginAsDemo, isDemoMode, user } = useAuth();
+  const { signIn, signUp, isDemoMode, user } = useAuth();
 
   const [mode, setMode] = useState<'login' | 'signup'>(initialMode);
   const [name, setName] = useState('');
@@ -87,14 +87,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       const msg = err instanceof Error ? err.message : String(err);
       setErrorMessage('Erro ao gerar backup: ' + msg);
     }
-  };
-
-  const handleQuickDemo = async () => {
-    setIsSubmitting(true);
-    await loginAsDemo();
-    setIsSubmitting(false);
-    if (onSuccess) onSuccess();
-    onClose();
   };
 
   return (
@@ -407,41 +399,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </button>
             </span>
           )}
-        </div>
-
-        {/* Quick Demo Access Bar */}
-        <div
-          style={{
-            marginTop: '1.5rem',
-            paddingTop: '1.25rem',
-            borderTop: '1px solid var(--border-color)',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '0.5rem',
-          }}
-        >
-          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textAlign: 'center', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-            Acesso Rápido de Teste (1 Clique)
-          </div>
-
-          <button
-            type="button"
-            onClick={handleQuickDemo}
-            className="mock-btn text-muted"
-            style={{
-              width: '100%',
-              fontSize: '0.85rem',
-              padding: '0.65rem 0.75rem',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-            }}
-            title="Entrar como Concurseiro Aluno Demo"
-          >
-            <Sparkles size={14} color="#10b981" />
-            <span>Testar como Aluno Demo</span>
-          </button>
         </div>
 
         {/* Multi-Device Cloud Sync & Backup Helper */}

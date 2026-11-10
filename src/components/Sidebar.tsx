@@ -40,6 +40,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return typeof window !== 'undefined' ? window.innerWidth < 1024 : false;
   });
 
+  // Decouple full-drawer rendering from isCollapsed when mobile drawer is open
+  const showFullDrawer = !isCollapsed || Boolean(isMobileOpen);
+
   const toggleCollapse = () => {
     setIsCollapsed((prev) => {
       const next = !prev;
@@ -104,15 +107,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
           aria-hidden="true"
         />
       )}
-      <aside className={`sidebar ${isCollapsed ? 'collapsed' : ''} ${isMobileOpen ? 'mobile-open' : ''}`}>
+      <aside className={`sidebar ${isCollapsed && !isMobileOpen ? 'collapsed' : ''} ${isMobileOpen ? 'mobile-open' : ''}`}>
         <div className="logo-area" style={{
           display: 'flex',
           alignItems: 'center',
-          justifyContent: isCollapsed ? 'center' : 'space-between',
-          padding: isCollapsed ? '1.25rem 0.5rem' : '1.5rem 1.25rem',
+          justifyContent: showFullDrawer ? 'space-between' : 'center',
+          padding: showFullDrawer ? '1.5rem 1.25rem' : '1.25rem 0.5rem',
           gap: '0.5rem'
         }}>
-          {!isCollapsed ? (
+          {showFullDrawer ? (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', overflow: 'hidden' }}>
                 <InfiniteBookLogo size={32} className="logo-icon" />
@@ -133,20 +136,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     <X size={20} />
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={toggleCollapse}
-                  className="sidebar-toggle-btn"
-                  title="Recolher menu lateral"
-                  aria-label="Recolher menu lateral"
-                >
-                  <ChevronLeft size={18} />
-                </button>
+                {!isMobileOpen && (
+                  <button
+                    type="button"
+                    onClick={toggleCollapse}
+                    className="sidebar-toggle-btn"
+                    title="Recolher menu lateral"
+                    aria-label="Recolher menu lateral"
+                  >
+                    <ChevronLeft size={18} />
+                  </button>
+                )}
               </div>
             </>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
               <InfiniteBookLogo size={32} className="logo-icon" />
+              {onCloseMobile && (
+                <button
+                  type="button"
+                  onClick={onCloseMobile}
+                  className="mobile-drawer-close-btn mobile-only"
+                  title="Fechar menu"
+                  aria-label="Fechar menu"
+                >
+                  <X size={20} />
+                </button>
+              )}
               <button
                 type="button"
                 onClick={toggleCollapse}
@@ -161,7 +177,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
       {/* EXAM COUNTDOWN CARD */}
-      {hasExamDate && concursoInfo?.dataProva && (!isCollapsed ? (
+      {hasExamDate && concursoInfo?.dataProva && (showFullDrawer ? (
         <div className="countdown-full" style={{
           margin: '0.75rem 1rem 0.25rem',
           background: 'linear-gradient(135deg, #ef4444, #be123c)',
@@ -218,7 +234,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       ))}
 
-      <nav className="nav-menu" style={{ padding: isCollapsed ? '1rem 0.35rem' : '1.25rem 0.75rem' }}>
+      <nav className="nav-menu" style={{ padding: showFullDrawer ? '1.25rem 0.75rem' : '1rem 0.35rem' }}>
         {menuItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
@@ -235,10 +251,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 }
               }}
               className={`nav-item ${isActive ? 'active' : ''}`}
-              title={isCollapsed ? `${item.label} - ${item.description}` : undefined}
+              title={!showFullDrawer ? `${item.label} - ${item.description}` : undefined}
             >
               <Icon className="nav-icon" />
-              {!isCollapsed && (
+              {showFullDrawer && (
                 <div className="nav-details">
                   <span className="nav-label">{item.label}</span>
                   <span className="nav-sublabel">{item.description}</span>
@@ -250,11 +266,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </nav>
 
       {/* QUICK LINKS SECTION (Landing Page & Feedback) */}
-      {!isCollapsed && (
+      {showFullDrawer && (
         <div style={{ padding: '0.5rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
           {onToggleLandingPage && (
             <button
-              onClick={onToggleLandingPage}
+              onClick={() => {
+                onToggleLandingPage();
+                if (onCloseMobile) {
+                  onCloseMobile();
+                }
+              }}
               className="mock-btn text-muted"
               style={{
                 width: '100%',
@@ -274,7 +295,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           {onOpenFeedback && (
             <button
-              onClick={onOpenFeedback}
+              onClick={() => {
+                onOpenFeedback();
+                if (onCloseMobile) {
+                  onCloseMobile();
+                }
+              }}
               className="mock-btn text-muted"
               style={{
                 width: '100%',
@@ -294,7 +320,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           {onOpenTerms && (
             <button
-              onClick={onOpenTerms}
+              onClick={() => {
+                onOpenTerms();
+                if (onCloseMobile) {
+                  onCloseMobile();
+                }
+              }}
               className="mock-btn text-muted"
               style={{
                 width: '100%',
@@ -315,12 +346,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
       )}
 
       {/* USER ACCOUNT FOOTER */}
-      {!isCollapsed ? (
+      {showFullDrawer ? (
         <div className="sidebar-footer" style={{ borderTop: '1px solid var(--border-color)', padding: '0.75rem 1rem' }}>
           {user ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
               <div
-                onClick={onOpenAuth}
+                onClick={() => {
+                  if (onOpenAuth) onOpenAuth();
+                  if (onCloseMobile) {
+                    onCloseMobile();
+                  }
+                }}
                 style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', overflow: 'hidden' }}
                 title="Clique para gerenciar conta"
               >
@@ -352,7 +388,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
 
               <button
-                onClick={() => signOut()}
+                onClick={() => {
+                  signOut();
+                  if (onCloseMobile) {
+                    onCloseMobile();
+                  }
+                }}
                 style={{
                   background: 'none',
                   border: 'none',
@@ -367,7 +408,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
           ) : (
             <button
-              onClick={onOpenAuth}
+              onClick={() => {
+                if (onOpenAuth) onOpenAuth();
+                if (onCloseMobile) {
+                  onCloseMobile();
+                }
+              }}
               className="mock-btn"
               style={{
                 width: '100%',
@@ -388,7 +434,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ) : (
         <div style={{ padding: '0.75rem 0.25rem', textAlign: 'center', borderTop: '1px solid var(--border-color)' }}>
           <button
-            onClick={onOpenAuth}
+            onClick={() => {
+              if (onOpenAuth) onOpenAuth();
+              if (onCloseMobile) {
+                onCloseMobile();
+              }
+            }}
             style={{
               background: 'none',
               border: 'none',
@@ -401,21 +452,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <User size={18} />
           </button>
         </div>
-      )}
-
-      {/* Backdrop overlay when sidebar is expanded in multitasking drawer mode */}
-      {!isCollapsed && (
-        <div
-          className="sidebar-backdrop"
-          onClick={() => setIsCollapsed(true)}
-          style={{
-            display: typeof window !== 'undefined' && window.innerWidth < 960 ? 'block' : 'none',
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            zIndex: 999,
-          }}
-        />
       )}
       </aside>
     </>
